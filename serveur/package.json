@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "seed": "bun src/lib/seed.ts",
+    "test:db": "bun src/test-connection.ts",
     "start": "bun src/index.ts"
   },
   "dependencies": {
