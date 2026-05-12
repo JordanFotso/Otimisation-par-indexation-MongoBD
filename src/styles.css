@@ -1,0 +1,182 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * MongoDB Index Optimization Console
+ * Inspired by AWS Console (chrome, sidebar) + Postman (workspace tabs, request panes)
+ * Dark professional console theme.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-topbar: var(--topbar);
+  --color-topbar-foreground: var(--topbar-foreground);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+:root {
+  --radius: 0.375rem;
+
+  /* AWS-console dark workspace */
+  --background: oklch(0.18 0.01 250);
+  --foreground: oklch(0.96 0.005 250);
+
+  --card: oklch(0.22 0.012 250);
+  --card-foreground: oklch(0.96 0.005 250);
+
+  --popover: oklch(0.22 0.012 250);
+  --popover-foreground: oklch(0.96 0.005 250);
+
+  /* AWS orange accent */
+  --primary: oklch(0.74 0.16 55);
+  --primary-foreground: oklch(0.16 0.01 250);
+
+  --secondary: oklch(0.28 0.012 250);
+  --secondary-foreground: oklch(0.96 0.005 250);
+
+  --muted: oklch(0.26 0.01 250);
+  --muted-foreground: oklch(0.7 0.015 250);
+
+  --accent: oklch(0.3 0.015 250);
+  --accent-foreground: oklch(0.96 0.005 250);
+
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.98 0.01 250);
+
+  --success: oklch(0.7 0.16 150);
+  --success-foreground: oklch(0.16 0.01 250);
+
+  --warning: oklch(0.78 0.15 85);
+  --warning-foreground: oklch(0.16 0.01 250);
+
+  --info: oklch(0.68 0.14 230);
+
+  --border: oklch(0.3 0.012 250);
+  --input: oklch(0.26 0.012 250);
+  --ring: oklch(0.74 0.16 55);
+
+  /* Chart palette: orange / cyan / green / red / violet */
+  --chart-1: oklch(0.74 0.16 55);
+  --chart-2: oklch(0.7 0.14 220);
+  --chart-3: oklch(0.72 0.16 150);
+  --chart-4: oklch(0.65 0.22 25);
+  --chart-5: oklch(0.7 0.16 300);
+
+  /* AWS-style very dark sidebar */
+  --sidebar: oklch(0.14 0.012 250);
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-primary: oklch(0.74 0.16 55);
+  --sidebar-primary-foreground: oklch(0.14 0.012 250);
+  --sidebar-accent: oklch(0.22 0.012 250);
+  --sidebar-accent-foreground: oklch(0.96 0.005 250);
+  --sidebar-border: oklch(0.24 0.012 250);
+  --sidebar-ring: oklch(0.74 0.16 55);
+
+  /* AWS top chrome — near black */
+  --topbar: oklch(0.1 0.01 250);
+  --topbar-foreground: oklch(0.96 0.005 250);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Console scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--background); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 6px;
+    border: 2px solid var(--background);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+}
+
+@layer components {
+  .console-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .console-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
