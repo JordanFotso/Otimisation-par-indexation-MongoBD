@@ -62,8 +62,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "MongoDB Index Console — Optimisation & Benchmark" },
       { property: "og:description", content: "Console d'analyse des stratégies d'indexation MongoDB : COLLSCAN vs IXSCAN, latence p95/p99, throughput et explain plan." },
       { name: "twitter:description", content: "Console d'analyse des stratégies d'indexation MongoDB : COLLSCAN vs IXSCAN, latence p95/p99, throughput et explain plan." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b886a3b3-6e8a-4c8e-a93b-c6668242a61e/id-preview-ad7c90a8--ab9623d4-80fc-4e5d-b8b9-daf30e8a493f.lovable.app-1778603721402.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b886a3b3-6e8a-4c8e-a93b-c6668242a61e/id-preview-ad7c90a8--ab9623d4-80fc-4e5d-b8b9-daf30e8a493f.lovable.app-1778603721402.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
