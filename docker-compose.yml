@@ -25,6 +25,17 @@ services:
     networks:
       - optimisation_network
 
+  k6:
+    image: grafana/k6
+    container_name: k6_benchmark
+    volumes:
+      - ./load-tests:/scripts
+    environment:
+      - API_URL=http://api:3001/api
+    networks:
+      - optimisation_network
+    profiles: [test] # Ne se lance que sur demande explicite
+
 networks:
   optimisation_network:
     driver: bridge

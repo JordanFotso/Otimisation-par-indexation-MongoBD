@@ -95,18 +95,27 @@ cd serveur
 bun run dev
 ```
 
-## Docker Compose
+## Docker & Benchmarking
 
-La méthode la plus simple pour lancer l'environnement complet (MongoDB + API) est d'utiliser Docker Compose :
+La méthode la plus simple pour lancer l'environnement complet et exécuter des tests de charge.
+
+### 1. Démarrer l'infrastructure
+Lancez MongoDB et l'API Express en arrière-plan :
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
-Cette commande démarre :
-- MongoDB sur le port `27017`.
-- L'API Express sur le port `3001`.
-- Un volume persistant `mongo_data` pour les données MongoDB.
+### 2. Exécuter un test de charge (k6)
+Une fois l'infrastructure prête, lancez le benchmark :
+
+```bash
+docker compose run --rm k6 run /scripts/benchmark.js
+```
+
+### 3. Utilitaires
+- **Logs** : `docker compose logs -f api`
+- **Arrêt** : `docker compose down`
 
 ## Déploiement
 
