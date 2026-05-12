@@ -41,18 +41,6 @@ export function ConsoleSidebar() {
 
   return (
     <aside className="hidden md:flex flex-col w-60 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-      <div className="px-4 py-3 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-sm bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-            M
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">Console</span>
-            <span className="text-sm font-semibold">Index Optimizer</span>
-          </div>
-        </div>
-      </div>
-
       <nav className="flex-1 overflow-y-auto py-3">
         {NAV.map((group) => (
           <div key={group.label} className="mb-4">
