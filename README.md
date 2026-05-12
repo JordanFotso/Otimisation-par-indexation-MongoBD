@@ -19,17 +19,30 @@ L'application simule une charge de travail sur une base de données MongoDB cont
 ## Technologies utilisées
 
 ### Frontend
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![TanStack](https://img.shields.io/badge/tanstack-%23FF4154.svg?style=for-the-badge&logo=react-query&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
+
 - [TanStack Start](https://tanstack.com/start) : Framework Fullstack (React 19).
 - [Tailwind CSS v4](https://tailwindcss.com) : Styling utilitaire.
 - [Recharts](https://recharts.org) : Visualisation de données.
 
 ### Backend (API REST)
+![Express.js](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB)
+![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)
+![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
+
 - [Express](https://expressjs.com) : Framework serveur Node.js.
 - [Mongoose](https://mongoosejs.com) : Modélisation d'objets MongoDB.
 - [Bun](https://bun.sh) : Runtime haute performance.
 - [Helmet](https://helmetjs.github.io/) & [CORS](https://github.com/expressjs/cors) : Sécurité et partage de ressources.
 
 ### Infrastructure
+![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?style=for-the-badge&logo=mongodb&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+
 - [MongoDB](https://www.mongodb.com) : Base de données NoSQL.
 - [Docker](https://www.docker.com) : Conteneurisation et orchestration.
 
