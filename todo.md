@@ -13,9 +13,9 @@ Ce document détaille les étapes nécessaires pour transformer les données sim
     - `GET /api/explain` : Exécute une commande `.explain()` réelle sur MongoDB et retourne le JSON.
 
 ## Phase 2 : Connexion Frontend
-- [ ] Installer `axios` et configurer un client API de base.
-- [ ] Configurer `TanStack Query` (React Query) dans `__root.tsx` pour gérer le cache et les états de chargement.
-- [ ] Créer des hooks personnalisés (ex: `useCollections`, `useMetrics`) dans `src/hooks/`.
+- [x] Installer `axios` et configurer un client API de base (`src/lib/api.ts`).
+- [x] Vérifier la configuration de `TanStack Query` dans `__root.tsx`.
+- [ ] Créer des hooks personnalisés pour chaque endpoint (ex: `useCollections`, `useMetrics`).
 - [ ] Remplacer les imports de `mock-data.ts` par les données issues des hooks dans les composants.
 
 ## Phase 3 : Logique de Benchmark Réel
