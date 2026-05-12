@@ -1,75 +1,100 @@
 # Console d'Optimisation par Indexation MongoDB
 
-Ce projet est une application web de haute performance conçue pour le benchmark et l'analyse en temps réel des stratégies d'indexation MongoDB. Elle permet de visualiser l'impact des différents types d'index (COLLSCAN vs IXSCAN) sur la latence, le débit (throughput) et l'utilisation des ressources système.
+Ce projet est une solution fullstack conçue pour le benchmark et l'analyse en temps réel des stratégies d'indexation MongoDB. Elle permet de visualiser l'impact des différents types d'index (COLLSCAN vs IXSCAN) sur la latence, le débit (throughput) et l'utilisation des ressources système.
 
 ## Table des matières
 
 - [Présentation](#présentation)
 - [Technologies utilisées](#technologies-utilisées)
+- [Architecture du projet](#architecture-du-projet)
 - [Fonctionnalités](#fonctionnalités)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Utilisation](#utilisation)
+- [Installation et Utilisation](#installation-et-utilisation)
+- [Docker Compose](#docker-compose)
 - [Déploiement](#déploiement)
 
 ## Présentation
 
-L'application simule une charge de travail sur une base de données contenant 5 millions de documents. Elle offre une interface interactive pour comparer trois stratégies d'indexation distinctes, permettant aux ingénieurs DevOps et Database d'identifier la configuration optimale pour leurs cas d'usage spécifiques.
+L'application simule une charge de travail sur une base de données MongoDB contenant 5 millions de documents. Elle offre une interface interactive pour comparer trois stratégies d'indexation distinctes, permettant d'identifier la configuration optimale pour des recherches intensives.
 
 ## Technologies utilisées
 
-Le projet repose sur une stack moderne privilégiant la performance et le rendu côté serveur (SSR) :
+### Frontend
+- [TanStack Start](https://tanstack.com/start) : Framework Fullstack (React 19).
+- [Tailwind CSS v4](https://tailwindcss.com) : Styling utilitaire.
+- [Recharts](https://recharts.org) : Visualisation de données.
 
-- [TanStack Start](https://tanstack.com/start) : Framework Fullstack basé sur React 19.
-- [TanStack Router](https://tanstack.com/router) : Gestion du routage typé et performant.
-- [Tailwind CSS v4](https://tailwindcss.com) : Framework utilitaire pour le styling.
-- [Recharts](https://recharts.org) : Visualisation de données pour les graphiques de performance.
-- [Bun](https://bun.sh) : Runtime et gestionnaire de paquets haute performance.
-- [Vite](https://vitejs.dev) : Outil de build et serveur de développement.
+### Backend (API REST)
+- [Express](https://expressjs.com) : Framework serveur Node.js.
+- [Mongoose](https://mongoosejs.com) : Modélisation d'objets MongoDB.
+- [Bun](https://bun.sh) : Runtime haute performance.
+- [Helmet](https://helmetjs.github.io/) & [CORS](https://github.com/expressjs/cors) : Sécurité et partage de ressources.
+
+### Infrastructure
+- [MongoDB](https://www.mongodb.com) : Base de données NoSQL.
+- [Docker](https://www.docker.com) : Conteneurisation et orchestration.
+
+## Architecture du projet
+
+Le projet est divisé en deux parties principales :
+
+- `/src` : Application frontend (TanStack Start).
+- `/serveur` : API REST Express.
+    - `src/controllers` : Logique métier.
+    - `src/routes` : Définition des points de terminaison.
+    - `src/models` : Schémas de données Mongoose.
+    - `src/config` : Configurations (Base de données, etc.).
+- `docker-compose.yml` : Orchestration des services à la racine.
 
 ## Fonctionnalités
 
-- **Benchmark en temps réel** : Analyse de la latence p95/p99 sous charge soutenue.
-- **Load Testing** : Génération de trafic synthétique via les moteurs [k6](https://k6.io) et [hey](https://github.com/rakyll/hey).
-- **Analyse Explain Plan** : Visualisation détaillée des étapes d'exécution des requêtes MongoDB.
-- **Tableau de bord de métriques** : Suivi du nombre de documents scannés par requête et du coût en écriture induit par l'indexation.
+- **Benchmark en temps réel** : Analyse de la latence p95/p99.
+- **Load Testing** : Simulation de trafic via k6 ou hey.
+- **Intégration MongoDB** : Connexion réelle et analyse des plans d'exécution.
+- **Conteneurisation complète** : Déploiement simplifié via Docker.
 
-## Architecture
+## Installation et Utilisation
 
-Le projet suit une structure modulaire :
+### Prérequis
+- [Bun](https://bun.sh) (recommandé) ou [Node.js](https://nodejs.org) (v22+).
+- [Docker](https://www.docker.com) (optionnel, pour l'orchestration).
 
-- `src/routes/` : Définition des pages et de la logique de routage.
-- `src/components/` : Bibliothèque de composants UI basés sur Radix UI.
-- `src/lib/` : Utilitaires et gestion des données de benchmark.
-- `src/server.ts` : Point d'entrée du serveur pour le rendu SSR.
-
-## Installation
-
-Pour installer les dépendances du projet, assurez-vous d'avoir installé [Bun](https://bun.sh) sur votre système :
+### Installation locale
+Installez les dépendances pour le frontend et le serveur :
 
 ```bash
+# Frontend
+bun install
+
+# Serveur
+cd serveur
 bun install
 ```
 
-## Utilisation
-
-### Développement
-
-Pour lancer le serveur de développement avec rechargement à chaud :
+### Lancement en mode développement
+Vous devez lancer les deux parties séparément si vous n'utilisez pas Docker :
 
 ```bash
+# Terminal 1 (Racine - Frontend)
+bun run dev
+
+# Terminal 2 (Dossier serveur - API)
+cd serveur
 bun run dev
 ```
 
-### Build et Production
+## Docker Compose
 
-Pour générer la version de production optimisée :
+La méthode la plus simple pour lancer l'environnement complet (MongoDB + API) est d'utiliser Docker Compose :
 
 ```bash
-bun run build
-bun run start
+docker compose up --build
 ```
+
+Cette commande démarre :
+- MongoDB sur le port `27017`.
+- L'API Express sur le port `3001`.
+- Un volume persistant `mongo_data` pour les données MongoDB.
 
 ## Déploiement
 
-L'application est configurée pour être déployée sur [Cloudflare Pages](https://pages.cloudflare.com/) ou tout autre environnement supportant les Workers, grâce à l'intégration native de TanStack Start et du fichier `wrangler.jsonc`.
+Le frontend est optimisé pour [Cloudflare Pages](https://pages.cloudflare.com/). Le serveur API peut être déployé sur toute plateforme supportant les conteneurs Docker ou un environnement Node.js/Bun.
