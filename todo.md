@@ -4,8 +4,8 @@ Ce document détaille les étapes nécessaires pour transformer les données sim
 
 ## Phase 1 : Infrastructure API (Backend)
 - [x] Créer l'architecture de base du serveur API REST Express.
-- [ ] Créer un script de "Seeding" pour injecter 5 millions de documents dans MongoDB via Docker.
-- [ ] Implémenter les modèles Mongoose pour les collections de test.
+- [x] Implémenter les modèles Mongoose (`User`) avec 3 stratégies d'indexation distinctes.
+- [x] Créer un script de "Seeding" (`bun run seed`) pour générer des données massives.
 - [ ] Créer les endpoints REST réels :
     - `GET /api/collections` : Retourne l'état réel des index et le nombre de documents.
     - `GET /api/metrics/response-time` : Calcule la latence réelle sur les 3 types d'index.

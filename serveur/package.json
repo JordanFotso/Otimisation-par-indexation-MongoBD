@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "bun --watch src/index.ts",
+    "seed": "bun src/lib/seed.ts",
     "start": "bun src/index.ts"
   },
   "dependencies": {
