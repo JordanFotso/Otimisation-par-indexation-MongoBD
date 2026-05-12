@@ -71,6 +71,20 @@ Le projet est divisé en deux parties principales :
 - [Bun](https://bun.sh) (recommandé) ou [Node.js](https://nodejs.org) (v22+).
 - [Docker](https://www.docker.com) (optionnel, pour l'orchestration).
 
+#### Installation de Bun
+Si vous n'avez pas encore Bun, vous pouvez l'installer avec les commandes suivantes :
+
+**Linux & macOS :**
+```bash
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc  # Ou source ~/.zshrc selon votre shell
+```
+
+**Windows (via PowerShell) :**
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
 ### Installation locale
 Installez les dépendances pour le frontend et le serveur :
 
