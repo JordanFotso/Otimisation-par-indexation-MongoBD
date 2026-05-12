@@ -4,5 +4,15 @@ import * as apiController from "../controllers/api.controller";
 const router = Router();
 
 router.get("/status", apiController.getStatus);
+router.get("/collections", apiController.getCollections);
+router.get("/metrics/response-time", apiController.getResponseTime);
+router.get("/metrics/timeseries", apiController.getTimeseries);
+router.get("/explain", apiController.getExplain);
+
+// CRUD Utilisateurs
+router.get("/users", apiController.getUsers);
+router.post("/users", apiController.createUser);
+router.patch("/users/:id", apiController.updateUser);
+router.delete("/users/:id", apiController.deleteUser);
 
 export default router;

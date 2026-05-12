@@ -6,11 +6,7 @@ Ce document détaille les étapes nécessaires pour transformer les données sim
 - [x] Créer l'architecture de base du serveur API REST Express.
 - [x] Implémenter les modèles Mongoose (`User`) avec 3 stratégies d'indexation distinctes.
 - [x] Créer un script de "Seeding" (`bun run seed`) pour générer des données massives.
-- [ ] Créer les endpoints REST réels :
-    - `GET /api/collections` : Retourne l'état réel des index et le nombre de documents.
-    - `GET /api/metrics/response-time` : Calcule la latence réelle sur les 3 types d'index.
-    - `POST /api/benchmark/run` : Déclenche une série de requêtes pour mesurer les performances.
-    - `GET /api/explain` : Exécute une commande `.explain()` réelle sur MongoDB et retourne le JSON.
+- [x] Créer les endpoints REST réels (`/collections`, `/metrics`, `/explain`).
 
 ## Phase 2 : Connexion Frontend
 - [x] Installer `axios` et configurer un client API de base (`src/lib/api.ts`).
