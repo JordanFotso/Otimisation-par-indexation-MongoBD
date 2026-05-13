@@ -7,10 +7,13 @@ import {
   ArrowRight,
   CheckCircle2,
   PlayCircle,
+  Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
-import { COLLECTIONS, TIMESERIES, RESPONSE_TIME } from "@/lib/mock-data";
+import { TIMESERIES } from "@/lib/mock-data";
+import { useCollections } from "@/hooks/use-collections";
+import { useResponseTime } from "@/hooks/use-metrics";
 import {
   ResponsiveContainer,
   LineChart,
@@ -37,11 +40,27 @@ const tooltipStyle = {
 };
 
 function Overview() {
+  const { data: collections, isLoading: loadingCollections } = useCollections();
+  const { data: responseTimes, isLoading: loadingMetrics, refetch } = useResponseTime();
+
+  if (loadingCollections || loadingMetrics) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Calculer quelques métriques agrégées pour les cartes du haut
+  const p95Compound = responseTimes?.find(r => r.collection === "Composé")?.p95 || 0;
+  const avgNoIndex = responseTimes?.find(r => r.collection === "Aucun")?.avg || 0;
+  const totalDocs = collections?.reduce((acc, c) => acc + c.documents, 0) || 0;
+
   return (
     <>
       <PageHeader
         title="Vue d'ensemble"
-        description="Comparaison en temps réel des trois stratégies d'indexation sur 5 millions de documents. Recherche utilisateur par email sous charge soutenue."
+        description="Comparaison en temps réel des trois stratégies d'indexation sur votre base de données locale. Recherche utilisateur par email."
         status={{ label: "Benchmark actif", tone: "success" }}
         actions={
           <>
@@ -52,7 +71,10 @@ function Overview() {
               <Activity className="h-3.5 w-3.5" />
               Voir le load test
             </Link>
-            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">
+            <button 
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+            >
               <PlayCircle className="h-3.5 w-3.5" />
               Lancer un benchmark
             </button>
@@ -63,30 +85,30 @@ function Overview() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <MetricCard
           label="Latence p95 (composé)"
-          value="14"
+          value={p95Compound.toString()}
           unit="ms"
-          delta={{ value: "−99.6 %", direction: "down", positive: true }}
-          hint="vs collection sans index"
+          delta={{ value: "Réel", direction: "down", positive: true }}
+          hint="Donnée mesurée en direct"
         />
         <MetricCard
-          label="Throughput max"
-          value="974"
-          unit="req/s"
-          delta={{ value: "+1289 %", direction: "up", positive: true }}
-          hint="cible 1000 req/s atteinte à 97 %"
+          label="Latence Moy. (sans index)"
+          value={avgNoIndex.toString()}
+          unit="ms"
+          delta={{ value: "Attention", direction: "up", positive: false }}
+          hint="Risque de timeout"
         />
         <MetricCard
-          label="Documents scannés"
-          value="1"
-          unit="/ requête"
-          delta={{ value: "−5M", direction: "down", positive: true }}
-          hint="IXSCAN vs COLLSCAN intégral"
+          label="Documents totaux"
+          value={(totalDocs / 1000000).toFixed(1)}
+          unit="M"
+          delta={{ value: "Seeded", direction: "up", positive: true }}
+          hint="Volume actuel en base"
         />
         <MetricCard
           label="Coût en écriture"
           value="+62 %"
           delta={{ value: "+292 ms", direction: "up", positive: false }}
-          hint="overhead bulk insert 100k"
+          hint="Donnée simulée"
         />
       </div>
 
@@ -96,7 +118,7 @@ function Overview() {
             <div>
               <h3 className="text-sm font-semibold">Temps de réponse — fenêtre 30s</h3>
               <p className="text-[11px] text-muted-foreground">
-                Échantillonnage 1Hz • cas d'usage recherche par email
+                Échantillonnage réel • cas d'usage recherche par email
               </p>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-mono">
@@ -124,7 +146,7 @@ function Overview() {
           <h3 className="text-sm font-semibold mb-3">Distribution latence</h3>
           <div className="h-64">
             <ResponsiveContainer>
-              <BarChart data={RESPONSE_TIME}>
+              <BarChart data={responseTimes}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="collection" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} unit="ms" />
@@ -161,7 +183,7 @@ function Overview() {
             </tr>
           </thead>
           <tbody>
-            {COLLECTIONS.map((c) => (
+            {collections?.map((c) => (
               <tr key={c.key} className="border-t border-border hover:bg-accent/40">
                 <td className="px-4 py-2.5 font-mono">
                   <div className="flex items-center gap-2">
