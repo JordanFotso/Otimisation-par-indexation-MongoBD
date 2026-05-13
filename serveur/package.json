@@ -6,6 +6,7 @@
     "dev": "bun --watch src/index.ts",
     "seed": "bun src/lib/seed.ts",
     "test:db": "bun src/test-connection.ts",
+    "test": "bun test",
     "start": "bun src/index.ts"
   },
   "dependencies": {
@@ -17,6 +18,8 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "@types/cors": "^2.8.17"
+    "@types/cors": "^2.8.17",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2"
   }
 }
