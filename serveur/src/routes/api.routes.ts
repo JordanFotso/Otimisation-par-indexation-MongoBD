@@ -3,6 +3,7 @@ import * as apiController from "../controllers/api.controller";
 
 const router = Router();
 
+router.post("/benchmark/run", apiController.runBenchmark);
 router.get("/status", apiController.getStatus);
 router.get("/collections", apiController.getCollections);
 router.get("/metrics/response-time", apiController.getResponseTime);

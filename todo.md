@@ -17,7 +17,7 @@ Ce document détaille les étapes nécessaires pour transformer les données sim
 ## Phase 3 : Logique de Benchmark Réel
 - [x] Créer un dossier `load-tests/` avec des scripts k6 (`.js`) pour chaque scénario.
 - [x] Configurer k6 dans Docker Compose avec un profil `test` dédié.
-- [ ] Connecter le bouton "Lancer un benchmark" du frontend pour déclencher un conteneur k6 via l'API.
+- [x] Connecter le bouton "Lancer un benchmark" du frontend pour déclencher un conteneur k6 via l'API.
 - [ ] Implémenter le parsing des résultats JSON de k6 côté serveur.
 - [ ] Implémenter le calcul du "Throughput" (requêtes par seconde) basé sur les données réelles de k6.
 

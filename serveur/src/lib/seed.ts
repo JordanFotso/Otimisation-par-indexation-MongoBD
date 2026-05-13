@@ -9,13 +9,11 @@ const statuses = ["active", "inactive", "pending"] as const;
 
 function generateUser(id: number) {
   return {
-    email: `user_${id}_${Math.random().toString(36).substring(7)}@example.com`,
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    createdAt: new Date(Date.now() - Math.floor(Math.random() * 10000000000)),
+    email: `test_${id}@example.com`,
+    status: ["active", "inactive", "pending"][id % 3],
+    createdAt: new Date(Date.now() - (id * 1000 * 60 * 60)), // Dates différentes pour le tri
     metadata: {
-      loginCount: Math.floor(Math.random() * 100),
-      lastIp: `192.168.1.${Math.floor(Math.random() * 255)}`,
-      tags: ["benchmark", "test", "mongodb"].slice(0, Math.floor(Math.random() * 3) + 1)
+      loginCount: id % 100,
     }
   };
 }

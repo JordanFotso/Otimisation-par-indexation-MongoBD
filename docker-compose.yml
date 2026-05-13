@@ -23,7 +23,8 @@ services:
       - "3001:3001"
     volumes:
       - ./serveur:/app
-      - /app/node_modules # Évite d'écraser les modules du conteneur par ceux de l'hôte
+      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock # Accès au moteur Docker
     environment:
       - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/optimisation

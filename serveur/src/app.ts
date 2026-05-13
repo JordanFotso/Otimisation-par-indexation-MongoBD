@@ -8,7 +8,11 @@ const app = express();
 
 // Middlewares de base
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes

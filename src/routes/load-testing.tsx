@@ -2,6 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 import { THROUGHPUT, TIMESERIES } from "@/lib/mock-data";
+import { useState } from "react";
+import { Play, Loader2, Square } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useRunBenchmark } from "@/hooks/use-benchmark";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -14,9 +18,6 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { useState } from "react";
-import { Play, Square } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/load-testing")({
   component: LoadTesting,
@@ -31,28 +32,41 @@ const tooltipStyle = {
 };
 
 function LoadTesting() {
-  const [running, setRunning] = useState(true);
-  const [tool, setTool] = useState<"hey" | "k6">("k6");
   const [rps, setRps] = useState(500);
+  const [logs, setLogs] = useState<string>("");
+  const { mutate: run, isPending } = useRunBenchmark();
+
+  const handleStart = () => {
+    setLogs("Démarrage du conteneur k6...");
+    run({ rps, duration: "60s" }, {
+      onSuccess: (data) => {
+        setLogs(data.output);
+      },
+      onError: (error: any) => {
+        setLogs(`Erreur: ${error.message}`);
+      }
+    });
+  };
 
   return (
     <>
       <PageHeader
         title="Load Testing"
-        description="Génération de trafic synthétique avec Hey/k6. Trois cibles parallèles, chacune branchée sur une collection avec une stratégie d'index distincte."
-        status={{ label: running ? "Test en cours" : "Inactif", tone: running ? "success" : "info" }}
+        description="Génération de trafic synthétique avec k6. Trois cibles parallèles, chacune branchée sur une collection avec une stratégie d'index distincte."
+        status={{ label: isPending ? "Test en cours" : "Inactif", tone: isPending ? "success" : "info" }}
         actions={
           <button
-            onClick={() => setRunning((r) => !r)}
+            onClick={handleStart}
+            disabled={isPending}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md",
-              running
+              isPending
                 ? "bg-destructive/15 text-destructive border border-destructive/30 hover:bg-destructive/25"
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
             )}
           >
-            {running ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {running ? "Arrêter" : "Démarrer"}
+            {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {isPending ? "Test en cours..." : "Démarrer"}
           </button>
         }
       />
@@ -62,18 +76,9 @@ function LoadTesting() {
         <div>
           <label className="block text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Outil</label>
           <div className="flex rounded-md border border-border overflow-hidden text-[12px] font-medium">
-            {(["k6", "hey"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTool(t)}
-                className={cn(
-                  "px-3 py-1.5",
-                  tool === t ? "bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
-                )}
-              >
-                {t}
-              </button>
-            ))}
+             <button className="px-3 py-1.5 bg-primary text-primary-foreground cursor-default">
+                k6 (actif)
+             </button>
           </div>
         </div>
         <div>
@@ -100,15 +105,8 @@ function LoadTesting() {
             className="w-24 bg-background border border-border rounded px-2 py-1.5 text-[12px] font-mono"
           />
         </div>
-        <div>
-          <label className="block text-[11px] uppercase tracking-wider text-muted-foreground mb-1">VUs</label>
-          <input
-            defaultValue="200"
-            className="w-24 bg-background border border-border rounded px-2 py-1.5 text-[12px] font-mono"
-          />
-        </div>
         <div className="ml-auto text-[11px] font-mono text-muted-foreground">
-          $ {tool} run --vus 200 --duration 60s --rps {rps} ./bench.{tool === "k6" ? "js" : "sh"}
+          $ k6 run --duration 60s --rps {rps} ./bench.js
         </div>
       </div>
 
@@ -167,24 +165,11 @@ function LoadTesting() {
 
       <div className="console-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+          <span className={cn("h-2 w-2 rounded-full", isPending ? "bg-success animate-pulse" : "bg-muted")} />
           <h3 className="text-sm font-semibold">Console k6 — sortie temps réel</h3>
         </div>
-        <pre className="p-4 text-[12px] font-mono leading-relaxed bg-background overflow-x-auto">
-{`     execution: local
-        script: bench.js
-       output: -
-     scenarios: (100.00%) 1 scenario, 200 max VUs, 1m30s max duration
-
-     ✓ status is 200
-     checks.........................: 99.96% ✓ 29401 ✗ 11
-     data_received..................: 38 MB  632 kB/s
-     http_req_duration..............: avg=12.4ms  min=1ms med=8ms  max=156ms p(95)=42ms p(99)=88ms
-       { collection:no_index }......: avg=1.82s   p(95)=3.21s p(99)=4.87s
-       { collection:single_index }..: avg=18ms    p(95)=42ms  p(99)=88ms
-       { collection:compound_index }: avg=6ms     p(95)=14ms  p(99)=28ms
-     iterations.....................: 29412   490.2/s
-     vus............................: 200    min=200  max=200`}
+        <pre className="p-4 text-[12px] font-mono leading-relaxed bg-background overflow-x-auto min-h-[200px]">
+          {logs}
         </pre>
       </div>
     </>

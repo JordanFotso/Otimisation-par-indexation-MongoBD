@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { useScenarios } from "@/hooks/use-scenarios";
+import { useExecuteScenario } from "@/hooks/use-execute-scenario";
 import { useState } from "react";
 import { Send, Save, Code2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ function Scenarios() {
   const { data: scenarios, isLoading } = useScenarios();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<"params" | "query" | "response">("query");
+  const { mutate: execute, data: response, isPending } = useExecuteScenario();
 
   if (isLoading || !scenarios) {
     return (
@@ -23,6 +25,12 @@ function Scenarios() {
   }
 
   const scenario = scenarios.find((s) => s.id === (activeId || scenarios[0].id))!;
+
+  const handleExecute = () => {
+    setTab("response");
+    const filters = buildFilter(scenario.id);
+    execute({ strategy: "compound_index", ...filters });
+  };
 
   return (
     <>
@@ -66,7 +74,7 @@ function Scenarios() {
 
         {/* Workspace */}
         <div className="col-span-12 md:col-span-9 console-card overflow-hidden flex flex-col">
-          {/* ... suite du code (URL bar, Tabs, etc.) ... */}
+          {/* URL bar */}
           <div className="p-3 border-b border-border flex items-center gap-2">
             <select className="bg-background border border-border rounded px-2 py-1.5 text-[12px] font-mono font-semibold text-success">
               <option>{scenario.method}</option>
@@ -75,14 +83,19 @@ function Scenarios() {
               defaultValue={scenario.path}
               className="flex-1 bg-background border border-border rounded px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
-              <Send className="h-3.5 w-3.5" /> Envoyer
+            <button 
+              onClick={handleExecute}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} 
+              Envoyer
             </button>
             <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] rounded-md border border-border hover:bg-accent">
               <Save className="h-3.5 w-3.5" />
             </button>
           </div>
 
+          {/* Tabs */}
           <div className="flex border-b border-border text-[12px]">
             {(["params", "query", "response"] as const).map((t) => (
               <button
@@ -100,6 +113,7 @@ function Scenarios() {
             ))}
           </div>
 
+          {/* Body */}
           <div className="p-4 min-h-[320px]">
             {tab === "params" && (
               <table className="w-full text-[13px]">
@@ -115,10 +129,10 @@ function Scenarios() {
                     <tr key={f} className="border-b border-border/60">
                       <td className="py-2">{f}</td>
                       <td className="py-2 text-muted-foreground">
-                        {f === "email" ? "user42@acme.io" : f === "status" ? "active" : "2024-01-01"}
+                        {f === "email" ? "test_1@example.com" : f === "status" ? "active" : "2024-01-01"}
                       </td>
                       <td className="py-2 text-muted-foreground text-xs">
-                        Filtre indexable haute cardinalité
+                        Filtre indexable
                       </td>
                     </tr>
                   ))}
@@ -140,28 +154,20 @@ function Scenarios() {
 
             {tab === "response" && (
               <div>
-                <div className="flex items-center gap-3 mb-3 text-[12px] font-mono">
-                  <span className="console-chip bg-success/15 text-success border border-success/30">200 OK</span>
-                  <span className="text-muted-foreground">14 ms</span>
-                  <span className="text-muted-foreground">1.2 KB</span>
-                  <span className="text-muted-foreground">IXSCAN</span>
-                </div>
-                <pre className="bg-background border border-border rounded p-3 text-[12px] font-mono overflow-x-auto">
-{`{
-  "data": [{
-    "_id": "65f12...a8",
-    "email": "user42@acme.io",
-    "status": "active",
-    "createdAt": "2024-09-12T10:14:22Z"
-  }],
-  "stats": {
-    "stage": "IXSCAN",
-    "totalDocsExamined": 1,
-    "totalKeysExamined": 1,
-    "executionTimeMillis": 4
-  }
-}`}
-                </pre>
+                {isPending && <div className="flex items-center gap-2"><Loader2 className="animate-spin h-4 w-4"/>Exécution en cours...</div>}
+                {response && (
+                  <>
+                    <div className="flex items-center gap-3 mb-3 text-[12px] font-mono">
+                      <span className="console-chip bg-success/15 text-success border border-success/30">200 OK</span>
+                      <span className="text-muted-foreground">{response.executionTimeMillis} ms</span>
+                      <span className="text-muted-foreground">{response.totalDocsExamined} docs scannés</span>
+                      <span className="text-muted-foreground">{response.stage}</span>
+                    </div>
+                    <pre className="bg-background border border-border rounded p-3 text-[12px] font-mono overflow-x-auto">
+                      {JSON.stringify(response.raw, null, 2)}
+                    </pre>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -172,7 +178,7 @@ function Scenarios() {
 }
 
 function buildFilter(id: string) {
-  if (id === "S1") return { email: "user42@acme.io" };
-  if (id === "S2") return { status: "active", createdAt: { $gte: "2024-01-01" } };
-  return { status: "active", createdAt: { $gte: "2024-01-01" } };
+  if (id === "S1") return { email: "test_1@example.com" };
+  if (id === "S2") return { status: "active" };
+  return { status: "active" };
 }

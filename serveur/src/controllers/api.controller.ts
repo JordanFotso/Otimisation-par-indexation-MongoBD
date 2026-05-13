@@ -2,10 +2,22 @@ import { Request, Response } from "express";
 import { UserNoIndex, UserSingleIndex, UserCompoundIndex } from "../models/user.model";
 import { Metric } from "../models/metric.model";
 import mongoose from "mongoose";
+import { exec } from "child_process";
 
-// Utilitaire pour mesurer le temps d'exécution et enregistrer le résultat
-const measureAndSaveTime = async (model: any, strategy: string, fn: () => Promise<any>) => {
-  const start = process.hrtime();
+// ... (code existant)
+
+export const runBenchmark = async (req: Request, res: Response) => {
+  const { rps, duration } = req.body;
+  const cmd = `docker compose run --rm -e API_URL=http://api:3001/api k6 run /scripts/benchmark.js`;
+
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`exec error: ${error}`);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ output: stdout });
+  });
+};
   await fn();
   const [seconds, nanoseconds] = process.hrtime(start);
   const latency = seconds * 1000 + nanoseconds / 1000000;
@@ -122,21 +134,28 @@ export const getResponseTime = async (req: Request, res: Response) => {
 
 export const getExplain = async (req: Request, res: Response) => {
   try {
-    const { strategy, email } = req.query;
+    const { strategy, ...filters } = req.query;
     
     let model;
     if (strategy === "no_index") model = UserNoIndex;
     else if (strategy === "single_index") model = UserSingleIndex;
     else model = UserCompoundIndex;
 
+    // Construction dynamique de la requête
+    const query: any = {};
+    if (filters.email) query.email = filters.email;
+    if (filters.status) query.status = filters.status;
+    if (filters.createdAt) query.createdAt = { $gte: new Date(filters.createdAt as string) };
+
     // Mesurer aussi l'explain
     const start = Date.now();
-    const explain = await model.find({ email: email as string }).explain("executionStats");
+    const explain = await model.find(query).explain("executionStats");
     const latency = Date.now() - start;
     
     // Enregistrer la métrique
     Metric.create({ strategy: strategy as string, latency }).catch(console.error);
 
+    // @ts-ignore
     const stats = explain.executionStats || explain[0]?.executionStats;
 
     if (!stats) {
@@ -185,6 +204,24 @@ export const getScenarios = async (req: Request, res: Response) => {
   ]);
 };
 
+
+export const getTimeseries = async (req: Request, res: Response) => {
+  try {
+    const rawData = await Metric.find().sort({ createdAt: -1 }).limit(90);
+    const data = Array.from({ length: 30 }, (_, i) => {
+      const slice = rawData.slice(i * 3, i * 3 + 3);
+      return {
+        t: i,
+        no_index: slice.find(d => d.strategy === "Aucun")?.latency || 0,
+        single_index: slice.find(d => d.strategy === "Simple")?.latency || 0,
+        compound_index: slice.find(d => d.strategy === "Composé")?.latency || 0,
+      };
+    }).reverse();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
 // --- CRUD ENDPOINTS ---
 
