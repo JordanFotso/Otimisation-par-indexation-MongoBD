@@ -156,27 +156,35 @@ export const getExplain = async (req: Request, res: Response) => {
   }
 };
 
-export const getTimeseries = async (req: Request, res: Response) => {
-  try {
-    // Récupérer les 30 dernières métriques pour chaque stratégie
-    const rawData = await Metric.find().sort({ createdAt: -1 }).limit(90);
-    
-    // Transformer en format série temporelle
-    const data = Array.from({ length: 30 }, (_, i) => {
-      const slice = rawData.slice(i * 3, i * 3 + 3);
-      return {
-        t: i,
-        no_index: slice.find(d => d.strategy === "Aucun")?.latency || 0,
-        single_index: slice.find(d => d.strategy === "Simple")?.latency || 0,
-        compound_index: slice.find(d => d.strategy === "Composé")?.latency || 0,
-      };
-    }).reverse();
-    
-    res.json(data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+export const getScenarios = async (req: Request, res: Response) => {
+  res.json([
+    {
+      id: "S1",
+      name: "Recherche par email",
+      method: "GET",
+      path: "/api/users?email=:email",
+      description: "Lookup unique sur un champ indexable haute cardinalité.",
+      filters: ["email"],
+    },
+    {
+      id: "S2",
+      name: "Filtres multiples",
+      method: "GET",
+      path: "/api/users?status=active&createdAt=...",
+      description: "Filtre composé status + plage de date de création.",
+      filters: ["status", "createdAt"],
+    },
+    {
+      id: "S3",
+      name: "Tri + pagination",
+      method: "GET",
+      path: "/api/users?status=active&sort=-createdAt&page=42",
+      description: "Requête complexe combinant filtre, tri descendant et pagination.",
+      filters: ["status", "createdAt", "email"],
+    },
+  ]);
 };
+
 
 // --- CRUD ENDPOINTS ---
 

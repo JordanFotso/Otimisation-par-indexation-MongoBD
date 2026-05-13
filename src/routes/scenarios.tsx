@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
-import { SCENARIOS } from "@/lib/mock-data";
+import { useScenarios } from "@/hooks/use-scenarios";
 import { useState } from "react";
-import { Send, Save, Code2 } from "lucide-react";
+import { Send, Save, Code2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/scenarios")({
@@ -10,9 +10,19 @@ export const Route = createFileRoute("/scenarios")({
 });
 
 function Scenarios() {
-  const [active, setActive] = useState(SCENARIOS[0].id);
+  const { data: scenarios, isLoading } = useScenarios();
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<"params" | "query" | "response">("query");
-  const scenario = SCENARIOS.find((s) => s.id === active)!;
+
+  if (isLoading || !scenarios) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const scenario = scenarios.find((s) => s.id === (activeId || scenarios[0].id))!;
 
   return (
     <>
@@ -28,13 +38,13 @@ function Scenarios() {
             Collection de requêtes
           </div>
           <ul>
-            {SCENARIOS.map((s) => (
+            {scenarios.map((s) => (
               <li key={s.id}>
                 <button
-                  onClick={() => setActive(s.id)}
+                  onClick={() => setActiveId(s.id)}
                   className={cn(
                     "w-full text-left px-3 py-2 text-[13px] flex items-start gap-2 border-l-2 transition-colors",
-                    active === s.id
+                    (activeId || scenarios[0].id) === s.id
                       ? "border-primary bg-accent/60"
                       : "border-transparent hover:bg-accent/40"
                   )}
@@ -56,7 +66,7 @@ function Scenarios() {
 
         {/* Workspace */}
         <div className="col-span-12 md:col-span-9 console-card overflow-hidden flex flex-col">
-          {/* URL bar */}
+          {/* ... suite du code (URL bar, Tabs, etc.) ... */}
           <div className="p-3 border-b border-border flex items-center gap-2">
             <select className="bg-background border border-border rounded px-2 py-1.5 text-[12px] font-mono font-semibold text-success">
               <option>{scenario.method}</option>
@@ -73,7 +83,6 @@ function Scenarios() {
             </button>
           </div>
 
-          {/* Tabs */}
           <div className="flex border-b border-border text-[12px]">
             {(["params", "query", "response"] as const).map((t) => (
               <button
@@ -91,7 +100,6 @@ function Scenarios() {
             ))}
           </div>
 
-          {/* Body */}
           <div className="p-4 min-h-[320px]">
             {tab === "params" && (
               <table className="w-full text-[13px]">
@@ -156,11 +164,6 @@ function Scenarios() {
                 </pre>
               </div>
             )}
-          </div>
-
-          <div className="border-t border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground flex items-center gap-3">
-            <Code2 className="h-3.5 w-3.5" />
-            Exécution simulée sur les 3 collections en parallèle
           </div>
         </div>
       </div>
