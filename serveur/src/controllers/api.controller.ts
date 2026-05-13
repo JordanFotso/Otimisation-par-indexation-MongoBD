@@ -35,20 +35,27 @@ export const getCollections = async (req: Request, res: Response) => {
 
     const results = await Promise.all(models.map(async ({ model, key, label, index, color }) => {
       let totalIndexSize = 0;
+      let stats;
       try {
-        // Utilisation de la commande brute pour plus de fiabilité sur MongoDB 7.0
-        const stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
+        stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
         totalIndexSize = stats?.totalIndexSize || 0;
       } catch (e) {
-        // Fallback si collStats échoue (ex: collection vide)
         totalIndexSize = 0;
       }
       
       const count = await model.countDocuments();
       
+      // Calcul dynamique du statut :
+      // 1. Critical si pas d'index (no_index)
+      // 2. Warning si index mais latence potentiellement élevée (simplifié ici par la taille)
+      // 3. Healthy si index et bonne performance
       let status: "critical" | "warning" | "healthy" = "healthy";
-      if (key === "no_index") status = "critical";
-      else if (key === "single_index") status = "warning";
+      if (key === "no_index") {
+        status = "critical";
+      } else if (key === "single_index" && totalIndexSize > 1024 * 1024 * 500) { 
+        // Warning si index simple dépasse 500MB
+        status = "warning";
+      }
 
       return {
         key,
