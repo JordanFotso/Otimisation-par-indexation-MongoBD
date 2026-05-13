@@ -28,10 +28,16 @@ export const getCollections = async (req: Request, res: Response) => {
     ];
 
     const results = await Promise.all(models.map(async ({ model, key, label, index, color }) => {
-      const stats = await model.collection.stats();
+      let stats;
+      try {
+        stats = await model.collection.stats();
+      } catch (e) {
+        // Si la collection n'existe pas encore
+        stats = { totalIndexSize: 0 };
+      }
+      
       const count = await model.countDocuments();
       
-      // Déterminer le statut basé sur l'existence de l'index (simplifié pour le démo)
       let status: "critical" | "warning" | "healthy" = "healthy";
       if (key === "no_index") status = "critical";
       else if (key === "single_index") status = "warning";
@@ -42,7 +48,7 @@ export const getCollections = async (req: Request, res: Response) => {
         label,
         index,
         documents: count,
-        indexSize: `${(stats.totalIndexSize / 1024 / 1024).toFixed(2)} MB`,
+        indexSize: `${((stats.totalIndexSize || 0) / 1024 / 1024).toFixed(2)} MB`,
         color,
         status
       };
@@ -56,8 +62,17 @@ export const getCollections = async (req: Request, res: Response) => {
 
 export const getResponseTime = async (req: Request, res: Response) => {
   try {
-    // On cherche un email au hasard pour tester
-    const randomUser = await UserCompoundIndex.findOne().skip(Math.floor(Math.random() * 1000));
+    // On cherche un utilisateur au hasard
+    const count = await UserCompoundIndex.countDocuments();
+    if (count === 0) {
+      return res.json([
+        { collection: "Aucun", min: 0, avg: 0, p95: 0, p99: 0, max: 0 },
+        { collection: "Simple", min: 0, avg: 0, p95: 0, p99: 0, max: 0 },
+        { collection: "Composé", min: 0, avg: 0, p95: 0, p99: 0, max: 0 },
+      ]);
+    }
+
+    const randomUser = await UserCompoundIndex.findOne().skip(Math.floor(Math.random() * Math.min(count, 1000)));
     const email = randomUser?.email || "test@example.com";
 
     const models = [
@@ -67,9 +82,8 @@ export const getResponseTime = async (req: Request, res: Response) => {
     ];
 
     const results = await Promise.all(models.map(async ({ model, collection }) => {
-      // On fait 5 mesures pour avoir une moyenne
       const times: number[] = [];
-      for(let i=0; i<5; i++) {
+      for(let i=0; i<3; i++) { // Réduit à 3 pour plus de rapidité
         const time = await measureTime(() => model.findOne({ email }).lean());
         times.push(time);
       }
@@ -79,8 +93,8 @@ export const getResponseTime = async (req: Request, res: Response) => {
         collection,
         min: Math.min(...times),
         avg: parseFloat(avg.toFixed(2)),
-        p95: Math.max(...times), // Simplifié
-        p99: Math.max(...times), // Simplifié
+        p95: Math.max(...times),
+        p99: Math.max(...times),
         max: Math.max(...times)
       };
     }));
@@ -101,15 +115,20 @@ export const getExplain = async (req: Request, res: Response) => {
     else model = UserCompoundIndex;
 
     const explain = await model.find({ email: email as string }).explain("executionStats");
-    const stats = explain.executionStats;
+    // @ts-ignore - Les types Mongoose explain sont parfois complexes
+    const stats = explain.executionStats || explain[0]?.executionStats;
+
+    if (!stats) {
+       return res.status(404).json({ error: "Stats explain non disponibles" });
+    }
 
     res.json({
-      stage: stats.executionStages.stage,
+      stage: stats.executionStages?.stage || "UNKNOWN",
       totalDocsExamined: stats.totalDocsExamined,
       totalKeysExamined: stats.totalKeysExamined,
       executionTimeMillis: stats.executionTimeMillis,
       nReturned: stats.nReturned,
-      raw: stats // On envoie tout au cas où
+      raw: stats
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -117,7 +136,7 @@ export const getExplain = async (req: Request, res: Response) => {
 };
 
 export const getTimeseries = async (req: Request, res: Response) => {
-  // Génère des données de latence simulées mais basées sur des ordres de grandeur réels
+  // Génère des données de latence simulées
   const data = Array.from({ length: 30 }, (_, i) => ({
     t: i,
     no_index: 800 + Math.random() * 400,
@@ -145,12 +164,15 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
-    // Dans un benchmark, on insère dans les 3 pour rester synchro
     const userData = req.body;
+    // On génère un ID unique partagé pour les 3 collections
+    const _id = new mongoose.Types.ObjectId();
+    const newUser = { ...userData, _id };
+
     const [user] = await Promise.all([
-      UserNoIndex.create(userData),
-      UserSingleIndex.create(userData),
-      UserCompoundIndex.create(userData),
+      UserNoIndex.create(newUser),
+      UserSingleIndex.create(newUser),
+      UserCompoundIndex.create(newUser),
     ]);
     res.status(201).json(user);
   } catch (error: any) {
@@ -161,8 +183,13 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    // On met à jour l'email par exemple (champ indexé)
-    const user = await UserCompoundIndex.findByIdAndUpdate(id, req.body, { new: true });
+    // On met à jour dans les 3 collections pour rester cohérent
+    const [user] = await Promise.all([
+      UserNoIndex.findByIdAndUpdate(id, req.body, { new: true }),
+      UserSingleIndex.findByIdAndUpdate(id, req.body, { new: true }),
+      UserCompoundIndex.findByIdAndUpdate(id, req.body, { new: true }),
+    ]);
+
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
     res.json(user);
   } catch (error: any) {
@@ -173,7 +200,13 @@ export const updateUser = async (req: Request, res: Response) => {
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const user = await UserCompoundIndex.findByIdAndDelete(id);
+    // On supprime des 3 collections
+    const [user] = await Promise.all([
+      UserNoIndex.findByIdAndDelete(id),
+      UserSingleIndex.findByIdAndDelete(id),
+      UserCompoundIndex.findByIdAndDelete(id),
+    ]);
+
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
     res.json({ message: "Utilisateur supprimé avec succès" });
   } catch (error: any) {

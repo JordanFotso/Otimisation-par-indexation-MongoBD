@@ -56,6 +56,9 @@ Le projet est divisé en deux parties principales :
     - `src/routes` : Définition des points de terminaison.
     - `src/models` : Schémas de données Mongoose.
     - `src/config` : Configurations (Base de données, etc.).
+    - `src/lib/seed.ts` : Script de génération de données.
+    - `src/__tests__` : Suite de tests automatisés.
+- `/load-tests` : Scripts de benchmark k6.
 - `docker-compose.yml` : Orchestration des services à la racine.
 
 ## Fonctionnalités
@@ -107,6 +110,22 @@ bun run dev
 # Terminal 2 (Dossier serveur - API)
 cd serveur
 bun run dev
+```
+
+### Tests et Qualité (Backend)
+Pour garantir la robustesse de l'API, vous pouvez lancer la suite de tests automatisés :
+
+```bash
+cd serveur
+bun test
+```
+
+### Génération de données (Seeding)
+Pour remplir la base de données avec des données de test réalistes (100 000 documents par défaut) :
+
+```bash
+cd serveur
+bun run seed
 ```
 
 ## Docker & Benchmarking
