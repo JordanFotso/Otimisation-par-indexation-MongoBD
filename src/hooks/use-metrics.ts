@@ -21,3 +21,21 @@ export function useResponseTime() {
     refetchInterval: 10000,
   });
 }
+
+export interface TimeseriesPoint {
+  t: number;
+  no_index: number;
+  single_index: number;
+  compound_index: number;
+}
+
+export function useTimeseries() {
+  return useQuery({
+    queryKey: ["metrics", "timeseries"],
+    queryFn: async () => {
+      const response = await api.get<TimeseriesPoint[]>("/metrics/timeseries");
+      return response.data;
+    },
+    refetchInterval: 5000, // Rafraîchissement plus fréquent pour le graphique temporel
+  });
+}

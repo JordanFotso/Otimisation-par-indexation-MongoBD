@@ -8,14 +8,18 @@ interface MetricCardProps {
   delta?: { value: string; direction: "up" | "down" | "flat"; positive?: boolean };
   hint?: string;
   className?: string;
+  indicatorColor?: string;
 }
 
-export function MetricCard({ label, value, unit, delta, hint, className }: MetricCardProps) {
+export function MetricCard({ label, value, unit, delta, hint, className, indicatorColor }: MetricCardProps) {
   const Icon =
     delta?.direction === "up" ? TrendingUp : delta?.direction === "down" ? TrendingDown : Minus;
   const positive = delta?.positive ?? false;
   return (
-    <div className={cn("console-card p-4", className)}>
+    <div 
+      className={cn("console-card p-4 border-l-4", className)}
+      style={{ borderLeftColor: indicatorColor }}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
           {label}

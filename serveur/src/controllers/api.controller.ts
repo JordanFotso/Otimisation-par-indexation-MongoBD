@@ -28,12 +28,14 @@ export const getCollections = async (req: Request, res: Response) => {
     ];
 
     const results = await Promise.all(models.map(async ({ model, key, label, index, color }) => {
-      let stats;
+      let totalIndexSize = 0;
       try {
-        stats = await model.collection.stats();
+        // Utilisation de la commande brute pour plus de fiabilité sur MongoDB 7.0
+        const stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
+        totalIndexSize = stats?.totalIndexSize || 0;
       } catch (e) {
-        // Si la collection n'existe pas encore
-        stats = { totalIndexSize: 0 };
+        // Fallback si collStats échoue (ex: collection vide)
+        totalIndexSize = 0;
       }
       
       const count = await model.countDocuments();
@@ -48,7 +50,7 @@ export const getCollections = async (req: Request, res: Response) => {
         label,
         index,
         documents: count,
-        indexSize: `${((stats.totalIndexSize || 0) / 1024 / 1024).toFixed(2)} MB`,
+        indexSize: `${(totalIndexSize / 1024 / 1024).toFixed(2)} MB`,
         color,
         status
       };

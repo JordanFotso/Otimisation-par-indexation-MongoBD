@@ -11,9 +11,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
-import { TIMESERIES } from "@/lib/mock-data";
 import { useCollections } from "@/hooks/use-collections";
-import { useResponseTime } from "@/hooks/use-metrics";
+import { useResponseTime, useTimeseries } from "@/hooks/use-metrics";
 import {
   ResponsiveContainer,
   LineChart,
@@ -42,8 +41,9 @@ const tooltipStyle = {
 function Overview() {
   const { data: collections, isLoading: loadingCollections } = useCollections();
   const { data: responseTimes, isLoading: loadingMetrics, refetch } = useResponseTime();
+  const { data: timeseriesData, isLoading: loadingTimeseries } = useTimeseries();
 
-  if (loadingCollections || loadingMetrics) {
+  if (loadingCollections || loadingMetrics || loadingTimeseries) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -52,8 +52,9 @@ function Overview() {
   }
 
   // Calculer quelques métriques agrégées pour les cartes du haut
-  const p95Compound = responseTimes?.find(r => r.collection === "Composé")?.p95 || 0;
   const avgNoIndex = responseTimes?.find(r => r.collection === "Aucun")?.avg || 0;
+  const avgSingle = responseTimes?.find(r => r.collection === "Simple")?.avg || 0;
+  const avgCompound = responseTimes?.find(r => r.collection === "Composé")?.avg || 0;
   const totalDocs = collections?.reduce((acc, c) => acc + c.documents, 0) || 0;
 
   return (
@@ -84,31 +85,36 @@ function Overview() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <MetricCard
-          label="Latence p95 (composé)"
-          value={p95Compound.toString()}
-          unit="ms"
-          delta={{ value: "Réel", direction: "down", positive: true }}
-          hint="Donnée mesurée en direct"
-        />
-        <MetricCard
           label="Latence Moy. (sans index)"
           value={avgNoIndex.toString()}
           unit="ms"
-          delta={{ value: "Attention", direction: "up", positive: false }}
-          hint="Risque de timeout"
+          indicatorColor="var(--chart-4)"
+          delta={{ value: "Critique", direction: "up", positive: false }}
+          hint="COLLSCAN intégral"
+        />
+        <MetricCard
+          label="Latence Moy. (simple)"
+          value={avgSingle.toString()}
+          unit="ms"
+          indicatorColor="var(--chart-2)"
+          delta={{ value: "Amélioré", direction: "down", positive: true }}
+          hint="IXSCAN sur email"
+        />
+        <MetricCard
+          label="Latence Moy. (composé)"
+          value={avgCompound.toString()}
+          unit="ms"
+          indicatorColor="var(--chart-3)"
+          delta={{ value: "Optimal", direction: "down", positive: true }}
+          hint="IXSCAN multi-champs"
         />
         <MetricCard
           label="Documents totaux"
-          value={(totalDocs / 1000000).toFixed(1)}
-          unit="M"
-          delta={{ value: "Seeded", direction: "up", positive: true }}
-          hint="Volume actuel en base"
-        />
-        <MetricCard
-          label="Coût en écriture"
-          value="+62 %"
-          delta={{ value: "+292 ms", direction: "up", positive: false }}
-          hint="Donnée simulée"
+          value={(totalDocs / 1000).toFixed(0)}
+          unit="k"
+          indicatorColor="var(--muted)"
+          delta={{ value: "Volume", direction: "flat", positive: true }}
+          hint="Données réelles en base"
         />
       </div>
 
@@ -129,7 +135,7 @@ function Overview() {
           </div>
           <div className="h-64">
             <ResponsiveContainer>
-              <LineChart data={TIMESERIES}>
+              <LineChart data={timeseriesData}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="t" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} unit="ms" />
