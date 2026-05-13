@@ -1,13 +1,19 @@
 import { Request, Response } from "express";
 import { UserNoIndex, UserSingleIndex, UserCompoundIndex } from "../models/user.model";
+import { Metric } from "../models/metric.model";
 import mongoose from "mongoose";
 
-// Utilitaire pour mesurer le temps d'exécution d'une fonction
-const measureTime = async (fn: () => Promise<any>) => {
+// Utilitaire pour mesurer le temps d'exécution et enregistrer le résultat
+const measureAndSaveTime = async (model: any, strategy: string, fn: () => Promise<any>) => {
   const start = process.hrtime();
   await fn();
   const [seconds, nanoseconds] = process.hrtime(start);
-  return seconds * 1000 + nanoseconds / 1000000;
+  const latency = seconds * 1000 + nanoseconds / 1000000;
+  
+  // Enregistrement en base de manière asynchrone
+  Metric.create({ strategy, latency }).catch(console.error);
+  
+  return latency;
 };
 
 export const getStatus = (req: Request, res: Response) => {
@@ -85,8 +91,8 @@ export const getResponseTime = async (req: Request, res: Response) => {
 
     const results = await Promise.all(models.map(async ({ model, collection }) => {
       const times: number[] = [];
-      for(let i=0; i<3; i++) { // Réduit à 3 pour plus de rapidité
-        const time = await measureTime(() => model.findOne({ email }).lean());
+      for(let i=0; i<3; i++) {
+        const time = await measureAndSaveTime(model, collection, () => model.findOne({ email }).lean());
         times.push(time);
       }
 
@@ -116,8 +122,14 @@ export const getExplain = async (req: Request, res: Response) => {
     else if (strategy === "single_index") model = UserSingleIndex;
     else model = UserCompoundIndex;
 
+    // Mesurer aussi l'explain
+    const start = Date.now();
     const explain = await model.find({ email: email as string }).explain("executionStats");
-    // @ts-ignore - Les types Mongoose explain sont parfois complexes
+    const latency = Date.now() - start;
+    
+    // Enregistrer la métrique
+    Metric.create({ strategy: strategy as string, latency }).catch(console.error);
+
     const stats = explain.executionStats || explain[0]?.executionStats;
 
     if (!stats) {
@@ -138,14 +150,25 @@ export const getExplain = async (req: Request, res: Response) => {
 };
 
 export const getTimeseries = async (req: Request, res: Response) => {
-  // Génère des données de latence simulées
-  const data = Array.from({ length: 30 }, (_, i) => ({
-    t: i,
-    no_index: 800 + Math.random() * 400,
-    single_index: 10 + Math.random() * 15,
-    compound_index: 2 + Math.random() * 5,
-  }));
-  res.json(data);
+  try {
+    // Récupérer les 30 dernières métriques pour chaque stratégie
+    const rawData = await Metric.find().sort({ createdAt: -1 }).limit(90);
+    
+    // Transformer en format série temporelle
+    const data = Array.from({ length: 30 }, (_, i) => {
+      const slice = rawData.slice(i * 3, i * 3 + 3);
+      return {
+        t: i,
+        no_index: slice.find(d => d.strategy === "Aucun")?.latency || 0,
+        single_index: slice.find(d => d.strategy === "Simple")?.latency || 0,
+        compound_index: slice.find(d => d.strategy === "Composé")?.latency || 0,
+      };
+    }).reverse();
+    
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 };
 
 // --- CRUD ENDPOINTS ---
