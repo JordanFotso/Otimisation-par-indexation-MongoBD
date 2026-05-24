@@ -57,6 +57,13 @@ function Overview() {
   const avgCompound = responseTimes?.find(r => r.collection === "Composé")?.avg || 0;
   const totalDocs = collections?.reduce((acc, c) => acc + c.documents, 0) || 0;
 
+  const getStatus = (val: number) => {
+    if (val === 0) return { value: "ATTENTE", direction: "flat" as const, positive: true };
+    if (val < 50) return { value: "OPTIMAL", direction: "down" as const, positive: true };
+    if (val < 200) return { value: "AMÉLIORÉ", direction: "down" as const, positive: true };
+    return { value: "CRITIQUE", direction: "up" as const, positive: false };
+  };
+
   return (
     <>
       <PageHeader
@@ -89,7 +96,7 @@ function Overview() {
           value={avgNoIndex.toString()}
           unit="ms"
           indicatorColor="var(--chart-4)"
-          delta={{ value: "Critique", direction: "up", positive: false }}
+          delta={getStatus(avgNoIndex)}
           hint="COLLSCAN intégral"
         />
         <MetricCard
@@ -97,7 +104,7 @@ function Overview() {
           value={avgSingle.toString()}
           unit="ms"
           indicatorColor="var(--chart-2)"
-          delta={{ value: "Amélioré", direction: "down", positive: true }}
+          delta={getStatus(avgSingle)}
           hint="IXSCAN sur email"
         />
         <MetricCard
@@ -105,7 +112,7 @@ function Overview() {
           value={avgCompound.toString()}
           unit="ms"
           indicatorColor="var(--chart-3)"
-          delta={{ value: "Optimal", direction: "down", positive: true }}
+          delta={getStatus(avgCompound)}
           hint="IXSCAN multi-champs"
         />
         <MetricCard
