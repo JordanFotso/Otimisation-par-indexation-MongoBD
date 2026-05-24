@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export interface ResponseTimeMetric {
@@ -17,25 +17,50 @@ export function useResponseTime() {
       const response = await api.get<ResponseTimeMetric[]>("/metrics/response-time");
       return response.data;
     },
-    // On rafraîchit toutes les 10 secondes pour voir l'évolution
     refetchInterval: 10000,
+    placeholderData: keepPreviousData,
   });
 }
 
 export interface TimeseriesPoint {
-  t: number;
+  t: string;
+  no_index: number;
+  no_index_rps: number;
+  single_index: number;
+  single_index_rps: number;
+  compound_index: number;
+  compound_index_rps: number;
+}
+
+export function useTimeseries(start?: number, duration?: number) {
+  return useQuery({
+    queryKey: ["metrics", "timeseries", start, duration],
+    queryFn: async () => {
+      const response = await api.get<TimeseriesPoint[]>("/metrics/timeseries", {
+        params: { start, duration }
+      });
+      return response.data;
+    },
+    refetchInterval: 3000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export interface ThroughputMetric {
   no_index: number;
   single_index: number;
   compound_index: number;
+  total: number;
 }
 
-export function useTimeseries() {
+export function useThroughput() {
   return useQuery({
-    queryKey: ["metrics", "timeseries"],
+    queryKey: ["metrics", "throughput"],
     queryFn: async () => {
-      const response = await api.get<TimeseriesPoint[]>("/metrics/timeseries");
+      const response = await api.get<ThroughputMetric>("/metrics/throughput");
       return response.data;
     },
-    refetchInterval: 5000, // Rafraîchissement plus fréquent pour le graphique temporel
+    refetchInterval: 2000,
+    placeholderData: keepPreviousData,
   });
 }

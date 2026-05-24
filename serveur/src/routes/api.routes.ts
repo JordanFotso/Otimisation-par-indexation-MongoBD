@@ -3,10 +3,12 @@ import * as apiController from "../controllers/api.controller";
 
 const router = Router();
 
-router.post("/benchmark/run", apiController.runBenchmark);
+// Routes Monitoring & Benchmark
+router.get("/benchmark/run", apiController.runBenchmark);
 router.get("/status", apiController.getStatus);
 router.get("/collections", apiController.getCollections);
 router.get("/metrics/response-time", apiController.getResponseTime);
+router.get("/metrics/throughput", apiController.getThroughput);
 router.get("/metrics/timeseries", apiController.getTimeseries);
 router.get("/scenarios", apiController.getScenarios);
 router.get("/explain", apiController.getExplain);

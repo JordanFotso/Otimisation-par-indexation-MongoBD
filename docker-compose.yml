@@ -1,3 +1,5 @@
+version: '3'
+
 services:
   mongodb:
     image: mongo:7.0
@@ -6,13 +8,6 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - optimisation_network
 
   api:
     build:
@@ -24,31 +19,23 @@ services:
     volumes:
       - ./serveur:/app
       - /app/node_modules
-      - /var/run/docker.sock:/var/run/docker.sock # Accès au moteur Docker
+      - .:/project
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/optimisation
       - NODE_ENV=development
     depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - optimisation_network
+      - mongodb
 
   k6:
-    image: grafana/k6
+    image: grafana/k6:latest
     container_name: k6_benchmark
     volumes:
-      - ./load-tests:/scripts
+      - ./load-tests:/scripts:ro # Montage en lecture seule
     environment:
       - API_URL=http://api:3001/api
-    networks:
-      - optimisation_network
-    profiles: [test] # Ne se lance que sur demande explicite
-
-networks:
-  optimisation_network:
-    driver: bridge
+    entrypoint: ["echo", "k6-ready"]
 
 volumes:
   mongo_data:

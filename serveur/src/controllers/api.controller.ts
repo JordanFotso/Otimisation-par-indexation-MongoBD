@@ -2,28 +2,17 @@ import { Request, Response } from "express";
 import { UserNoIndex, UserSingleIndex, UserCompoundIndex } from "../models/user.model";
 import { Metric } from "../models/metric.model";
 import mongoose from "mongoose";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 
-// ... (code existant)
-
-export const runBenchmark = async (req: Request, res: Response) => {
-  const { rps, duration } = req.body;
-  const cmd = `docker compose run --rm -e API_URL=http://api:3001/api k6 run /scripts/benchmark.js`;
-
-  exec(cmd, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`exec error: ${error}`);
-      return res.status(500).json({ error: error.message });
-    }
-    res.json({ output: stdout });
-  });
-};
+// Utilitaire pour mesurer le temps d'exécution et enregistrer le résultat
+const measureAndSaveTime = async (model: any, strategy: string, fn: () => Promise<any>) => {
+  const start = process.hrtime();
   await fn();
   const [seconds, nanoseconds] = process.hrtime(start);
   const latency = seconds * 1000 + nanoseconds / 1000000;
   
   // Enregistrement en base de manière asynchrone
-  Metric.create({ strategy, latency }).catch(console.error);
+  Metric.create({ strategy, latency }).catch(() => {});
   
   return latency;
 };
@@ -47,9 +36,8 @@ export const getCollections = async (req: Request, res: Response) => {
 
     const results = await Promise.all(models.map(async ({ model, key, label, index, color }) => {
       let totalIndexSize = 0;
-      let stats;
       try {
-        stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
+        const stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
         totalIndexSize = stats?.totalIndexSize || 0;
       } catch (e) {
         totalIndexSize = 0;
@@ -57,17 +45,9 @@ export const getCollections = async (req: Request, res: Response) => {
       
       const count = await model.countDocuments();
       
-      // Calcul dynamique du statut :
-      // 1. Critical si pas d'index (no_index)
-      // 2. Warning si index mais latence potentiellement élevée (simplifié ici par la taille)
-      // 3. Healthy si index et bonne performance
       let status: "critical" | "warning" | "healthy" = "healthy";
-      if (key === "no_index") {
-        status = "critical";
-      } else if (key === "single_index" && totalIndexSize > 1024 * 1024 * 500) { 
-        // Warning si index simple dépasse 500MB
-        status = "warning";
-      }
+      if (key === "no_index") status = "critical";
+      else if (key === "single_index" && totalIndexSize > 1024 * 1024 * 500) status = "warning";
 
       return {
         key,
@@ -89,7 +69,6 @@ export const getCollections = async (req: Request, res: Response) => {
 
 export const getResponseTime = async (req: Request, res: Response) => {
   try {
-    // On cherche un utilisateur au hasard
     const count = await UserCompoundIndex.countDocuments();
     if (count === 0) {
       return res.json([
@@ -100,7 +79,7 @@ export const getResponseTime = async (req: Request, res: Response) => {
     }
 
     const randomUser = await UserCompoundIndex.findOne().skip(Math.floor(Math.random() * Math.min(count, 1000)));
-    const email = randomUser?.email || "test@example.com";
+    const email = randomUser?.email || "test_1@example.com";
 
     const models = [
       { model: UserNoIndex, collection: "Aucun" },
@@ -141,19 +120,16 @@ export const getExplain = async (req: Request, res: Response) => {
     else if (strategy === "single_index") model = UserSingleIndex;
     else model = UserCompoundIndex;
 
-    // Construction dynamique de la requête
     const query: any = {};
     if (filters.email) query.email = filters.email;
     if (filters.status) query.status = filters.status;
     if (filters.createdAt) query.createdAt = { $gte: new Date(filters.createdAt as string) };
 
-    // Mesurer aussi l'explain
     const start = Date.now();
     const explain = await model.find(query).explain("executionStats");
     const latency = Date.now() - start;
     
-    // Enregistrer la métrique
-    Metric.create({ strategy: strategy as string, latency }).catch(console.error);
+    Metric.create({ strategy: strategy as string, latency }).catch(() => {});
 
     // @ts-ignore
     const stats = explain.executionStats || explain[0]?.executionStats;
@@ -204,27 +180,155 @@ export const getScenarios = async (req: Request, res: Response) => {
   ]);
 };
 
-
 export const getTimeseries = async (req: Request, res: Response) => {
   try {
-    const rawData = await Metric.find().sort({ createdAt: -1 }).limit(90);
-    const data = Array.from({ length: 30 }, (_, i) => {
-      const slice = rawData.slice(i * 3, i * 3 + 3);
-      return {
-        t: i,
-        no_index: slice.find(d => d.strategy === "Aucun")?.latency || 0,
-        single_index: slice.find(d => d.strategy === "Simple")?.latency || 0,
-        compound_index: slice.find(d => d.strategy === "Composé")?.latency || 0,
-      };
-    }).reverse();
+    const { start, duration } = req.query;
+    let startTime: Date;
+    let windowSeconds: number;
+
+    if (start) {
+      // Mode Test : On part du début du test jusqu'à la durée prévue
+      startTime = new Date(parseInt(start as string));
+      windowSeconds = parseInt(duration as string) || 60;
+    } else {
+      // Mode Moniteur : On montre les 5 dernières minutes glissantes
+      windowSeconds = 300;
+      startTime = new Date(Date.now() - windowSeconds * 1000);
+    }
+
+    const stats = await Metric.aggregate([
+      { $match: { createdAt: { $gte: startTime } } },
+      {
+        $group: {
+          _id: {
+            timestamp: {
+              $subtract: [
+                { $toLong: "$createdAt" },
+                { $mod: [{ $toLong: "$createdAt" }, 1000] }
+              ]
+            },
+            strategy: "$strategy"
+          },
+          avgLatency: { $avg: "$latency" },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.timestamp": 1 } }
+    ]);
+
+    const data = [];
+    const startTs = startTime.getTime();
+    
+    for (let i = 0; i < windowSeconds; i++) {
+      const currentTs = startTs + i * 1000;
+      const timeLabel = `${i}s`;
+
+      const findStat = (strat: string, time: number) => 
+        stats.find(s => s._id.timestamp === time && s._id.strategy === strat);
+
+      data.push({
+        t: timeLabel,
+        no_index: findStat("no_index", currentTs)?.avgLatency || 0,
+        no_index_rps: findStat("no_index", currentTs)?.count || 0,
+        single_index: findStat("single_index", currentTs)?.avgLatency || 0,
+        single_index_rps: findStat("single_index", currentTs)?.count || 0,
+        compound_index: findStat("compound_index", currentTs)?.avgLatency || 0,
+        compound_index_rps: findStat("compound_index", currentTs)?.count || 0,
+      });
+    }
+
     res.json(data);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// --- CRUD ENDPOINTS ---
+export const getThroughput = async (req: Request, res: Response) => {
+  try {
+    const windowSeconds = 10;
+    const startTime = new Date(Date.now() - windowSeconds * 1000);
 
+    const [stats, total] = await Promise.all([
+      Metric.aggregate([
+        { $match: { createdAt: { $gte: startTime } } },
+        { $group: { _id: "$strategy", count: { $sum: 1 } } }
+      ]),
+      Metric.countDocuments()
+    ]);
+
+    res.json({
+      windowSeconds,
+      total,
+      no_index: (stats.find(s => s._id === "Aucun" || s._id === "no_index")?.count || 0) / windowSeconds,
+      single_index: (stats.find(s => s._id === "Simple" || s._id === "single_index")?.count || 0) / windowSeconds,
+      compound_index: (stats.find(s => s._id === "Composé" || s._id === "compound_index")?.count || 0) / windowSeconds,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+export const runBenchmark = async (req: Request, res: Response) => {
+  console.log("[server]: Requête de benchmark reçue");
+  try {
+    const { duration = "60s", vus = "20" } = req.query;
+
+    // Configuration SSE
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    res.write("data: [INFO] Préparation du conteneur k6...\n\n");
+
+    const args = [
+      "run", 
+      "--rm", 
+      "--volumes-from", "api_optimisation",
+      "--network", "optimisation_default", 
+      "-e", `API_URL=http://api_optimisation:3001/api`, 
+      "-e", `DURATION=${duration}`,
+      "-e", `VUS=${vus}`,
+      "grafana/k6", 
+      "run", "/project/load-tests/benchmark.js"
+    ];
+
+    console.log("[server]: Lancement de la commande: docker " + args.join(" "));
+    const child = spawn("docker", args);
+
+    child.on("spawn", () => {
+      console.log("[server]: Processus Docker démarré avec succès");
+      res.write("data: [INFO] Processus Docker démarré...\n\n");
+    });
+
+    child.on("error", (err) => {
+      console.error("[server]: Erreur lors du spawn:", err);
+      res.write(`data: [ERREUR SYSTEME] ${err.message}\n\n`);
+    });
+
+    child.stdout.on("data", (data) => {
+      const lines = data.toString().split("\n");
+      lines.forEach(line => {
+        if (line.trim()) res.write(`data: ${line}\n\n`);
+      });
+    });
+
+    child.stderr.on("data", (data) => {
+      const lines = data.toString().split("\n");
+      lines.forEach(line => {
+        if (line.trim()) res.write(`data: [stderr] ${line}\n\n`);
+      });
+    });
+    child.on("close", (code) => {
+      res.write(`data: [DONE] Test terminé (${code})\n\n`);
+      res.end();
+    });
+    req.on("close", () => child.kill());
+  } catch (error: any) {
+    res.write(`data: [error] ${error.message}\n\n`);
+    res.end();
+  }
+};
+
+// CRUD
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const { page = 1, limit = 10 } = req.query;
@@ -241,11 +345,8 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const userData = req.body;
-    // On génère un ID unique partagé pour les 3 collections
     const _id = new mongoose.Types.ObjectId();
-    const newUser = { ...userData, _id };
-
+    const newUser = { ...req.body, _id };
     const [user] = await Promise.all([
       UserNoIndex.create(newUser),
       UserSingleIndex.create(newUser),
@@ -260,13 +361,11 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    // On met à jour dans les 3 collections pour rester cohérent
     const [user] = await Promise.all([
       UserNoIndex.findByIdAndUpdate(id, req.body, { new: true }),
       UserSingleIndex.findByIdAndUpdate(id, req.body, { new: true }),
       UserCompoundIndex.findByIdAndUpdate(id, req.body, { new: true }),
     ]);
-
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
     res.json(user);
   } catch (error: any) {
@@ -277,15 +376,13 @@ export const updateUser = async (req: Request, res: Response) => {
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    // On supprime des 3 collections
     const [user] = await Promise.all([
       UserNoIndex.findByIdAndDelete(id),
       UserSingleIndex.findByIdAndDelete(id),
       UserCompoundIndex.findByIdAndDelete(id),
     ]);
-
     if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
-    res.json({ message: "Utilisateur supprimé avec succès" });
+    res.json({ message: "Utilisateur supprimé" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
