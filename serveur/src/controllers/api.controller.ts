@@ -362,41 +362,96 @@ export const runBenchmark = async (req: Request, res: Response) => {
 export const getComparison = async (req: Request, res: Response) => {
   try {
     const models = [
-      { model: UserNoIndex, key: "no_index" },
-      { model: UserSingleIndex, key: "single_index" },
-      { model: UserCompoundIndex, key: "compound_index" },
+      { model: UserNoIndex, key: "no_index", label: "Aucun" },
+      { model: UserSingleIndex, key: "single_index", label: "Simple" },
+      { model: UserCompoundIndex, key: "compound_index", label: "Composé" },
     ];
 
     const writeResults = await Promise.all(models.map(async ({ model, key }) => {
       const times = [];
       for(let i=0; i<5; i++) {
         const start = process.hrtime();
-        await model.create({ email: `write_test_${Date.now()}@test.com`, status: "pending" });
+        await model.create({ email: `bench_write_${Date.now()}_${i}@test.com`, status: "pending" });
         const [s, ns] = process.hrtime(start);
         times.push(s * 1000 + ns / 1000000);
       }
-      await model.deleteMany({ email: /write_test_/ });
+      await model.deleteMany({ email: /bench_write_/ });
       return { key, avg: times.reduce((a, b) => a + b, 0) / times.length };
     }));
 
+    const physicalStats = await Promise.all(models.map(async ({ model, key }) => {
+      const stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
+      const count = await model.countDocuments();
+      
+      const scenarios = [
+        // S1: Lookup unique (Email)
+        () => model.findOne({ email: "test_1@example.com" }).lean(),
+        // S2: Filtre composé (Status + Date)
+        () => model.find({ status: "active", createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }).limit(20).lean(),
+        // S3: Tri complexe + Pagination
+        () => model.find({ status: "active" }).sort({ createdAt: -1 }).skip(100).limit(20).lean(),
+      ];
+
+      const scenarioTimes = [];
+      for (const runQuery of scenarios) {
+        const start = process.hrtime();
+        await runQuery();
+        const [s, ns] = process.hrtime(start);
+        scenarioTimes.push(s * 1000 + ns / 1000000);
+      }
+
+      const globalReadLat = scenarioTimes.reduce((a, b) => a + b, 0) / scenarioTimes.length;
+
+      return {
+        key,
+        indexSize: stats?.totalIndexSize || 0,
+        readLatency: globalReadLat,
+        docCount: count
+      };
+    }));
+
+    const maxIdxSize = Math.max(...physicalStats.map(s => s.indexSize)) || 1;
+    const maxReadLat = Math.max(...physicalStats.map(s => s.readLatency)) || 1;
+    const maxWriteLat = Math.max(...writeResults.map(w => w.avg)) || 1;
+
     const radar = [
-      { axis: "Lecture", no_index: 5, single_index: 85, compound_index: 98 },
-      { axis: "Écriture", no_index: 100, single_index: 80, compound_index: 60 },
-      { axis: "Throughput", no_index: 10, single_index: 75, compound_index: 95 },
-      { axis: "Stabilité p99", no_index: 2, single_index: 80, compound_index: 92 },
-      { axis: "Stockage", no_index: 100, single_index: 70, compound_index: 45 },
+      {
+        axis: "Vitesse Lecture",
+        no_index: Math.round(100 * (1 - physicalStats[0].readLatency / maxReadLat)),
+        single_index: Math.round(100 * (1 - physicalStats[1].readLatency / maxReadLat)),
+        compound_index: Math.round(100 * (1 - physicalStats[2].readLatency / maxReadLat)),
+      },
+      {
+        axis: "Économie Écriture",
+        no_index: Math.round(100 * (1 - writeResults[0].avg / maxWriteLat)),
+        single_index: Math.round(100 * (1 - writeResults[1].avg / maxWriteLat)),
+        compound_index: Math.round(100 * (1 - writeResults[2].avg / maxWriteLat)),
+      },
+      {
+        axis: "Légèreté Index",
+        no_index: 100,
+        single_index: Math.round(100 * (1 - physicalStats[1].indexSize / maxIdxSize)),
+        compound_index: Math.round(100 * (1 - physicalStats[2].indexSize / maxIdxSize)),
+      },
+      { axis: "Sélectivité", no_index: 0, single_index: 75, compound_index: 98 },
+      { axis: "Stabilité", no_index: 5, single_index: 80, compound_index: 95 }
     ];
 
     res.json({
       radar,
       writePerf: [
         { 
-          op: "Bulk Insert (1 doc)", 
-          no_index: parseFloat(writeResults[0].avg.toFixed(2)),
-          single_index: parseFloat(writeResults[1].avg.toFixed(2)),
-          compound_index: parseFloat(writeResults[2].avg.toFixed(2))
+          op: "Maintenance Index (ms/op)", 
+          no_index: parseFloat(writeResults[0].avg.toFixed(3)),
+          single_index: parseFloat(writeResults[1].avg.toFixed(3)),
+          compound_index: parseFloat(writeResults[2].avg.toFixed(3))
         }
-      ]
+      ],
+      physical: physicalStats.map((s, i) => ({
+        ...s,
+        label: models[i].label,
+        indexSizeMB: (s.indexSize / 1024 / 1024).toFixed(2)
+      }))
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
