@@ -360,6 +360,7 @@ export const runBenchmark = async (req: Request, res: Response) => {
 };
 
 export const getComparison = async (req: Request, res: Response) => {
+  console.log("[server]: Requête de comparaison reçue");
   try {
     const models = [
       { model: UserNoIndex, key: "no_index", label: "Aucun" },
@@ -367,6 +368,7 @@ export const getComparison = async (req: Request, res: Response) => {
       { model: UserCompoundIndex, key: "compound_index", label: "Composé" },
     ];
 
+    // 1. Coût en écriture
     const writeResults = await Promise.all(models.map(async ({ model, key }) => {
       const times = [];
       for(let i=0; i<5; i++) {
@@ -376,31 +378,38 @@ export const getComparison = async (req: Request, res: Response) => {
         times.push(s * 1000 + ns / 1000000);
       }
       await model.deleteMany({ email: /bench_write_/ });
-      return { key, avg: times.reduce((a, b) => a + b, 0) / times.length };
+      const avg = times.reduce((a, b) => a + b, 0) / times.length;
+      console.log(`  > Écriture ${key}: ${avg.toFixed(3)}ms`);
+      return { key, avg };
     }));
 
+    // 2. Lecture exhaustive
     const physicalStats = await Promise.all(models.map(async ({ model, key }) => {
       const stats = await mongoose.connection.db?.command({ collStats: model.collection.name });
       const count = await model.countDocuments();
       
       const scenarios = [
-        // S1: Lookup unique (Email)
         () => model.findOne({ email: "test_1@example.com" }).lean(),
-        // S2: Filtre composé (Status + Date)
-        () => model.find({ status: "active", createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }).limit(20).lean(),
-        // S3: Tri complexe + Pagination
-        () => model.find({ status: "active" }).sort({ createdAt: -1 }).skip(100).limit(20).lean(),
+        () => model.find({ status: "active" }).limit(20).lean(),
+        () => model.find({ status: "active" }).sort({ createdAt: -1 }).limit(20).lean(),
       ];
 
       const scenarioTimes = [];
       for (const runQuery of scenarios) {
-        const start = process.hrtime();
-        await runQuery();
-        const [s, ns] = process.hrtime(start);
-        scenarioTimes.push(s * 1000 + ns / 1000000);
+        const iterations = [];
+        for(let i=0; i<10; i++) {
+          const start = process.hrtime();
+          await runQuery();
+          const [s, ns] = process.hrtime(start);
+          iterations.push(s * 1000 + ns / 1000000);
+        }
+        scenarioTimes.push(iterations.reduce((a, b) => a + b, 0) / iterations.length);
       }
 
       const globalReadLat = scenarioTimes.reduce((a, b) => a + b, 0) / scenarioTimes.length;
+      console.log(`--- Stats pour ${key} ---`);
+      console.log(`  > Lecture (moy): ${globalReadLat.toFixed(3)}ms`);
+      console.log(`  > Index Size: ${stats?.totalIndexSize} octets`);
 
       return {
         key,
@@ -410,43 +419,85 @@ export const getComparison = async (req: Request, res: Response) => {
       };
     }));
 
-    const maxIdxSize = Math.max(...physicalStats.map(s => s.indexSize)) || 1;
-    const maxReadLat = Math.max(...physicalStats.map(s => s.readLatency)) || 1;
-    const maxWriteLat = Math.max(...writeResults.map(w => w.avg)) || 1;
+    // 3. Stabilité
+    const stabilityData = await Metric.aggregate([
+      { $group: { _id: "$strategy", stdDev: { $stdDevPop: "$latency" } } }
+    ]);
+    const getStabilityScore = (strat: string) => {
+      const stat = stabilityData.find(s => s._id === strat);
+      const dev = stat?.stdDev || 50;
+      const score = Math.max(10, Math.min(100, Math.round(100 * (1 - Math.min(dev, 50) / 50))));
+      console.log(`  > Stabilité ${strat}: ${score} (dev: ${dev.toFixed(3)})`);
+      return score;
+    };
+
+    // 4. Sélectivité
+    const selectivityScores = await Promise.all(models.map(async ({ model, key }) => {
+       const explain = await model.find({ status: "active" }).limit(1).explain("executionStats");
+       const stats = explain.executionStats || explain[0]?.executionStats;
+       const examined = stats?.totalDocsExamined || 1;
+       const returned = stats?.nReturned || 1;
+       const ratio = Math.max(0.01, returned / examined);
+       const score = Math.round(10 + 90 * ratio);
+       console.log(`  > Sélectivité ${key}: ${score} (examined: ${examined})`);
+       return score;
+    }));
+
+    // Helpers pour les scores relatifs (Lecture, Ecriture, Stockage)
+    const calculateRelativeScore = (values: number[], current: number, inverse = false) => {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      if (max === min) return 100;
+      return inverse 
+        ? Math.round(10 + 90 * (1 - (current - min) / (max - min)))
+        : Math.round(10 + 90 * ((current - min) / (max - min)));
+    };
+
+    const readLats = physicalStats.map(s => s.readLatency);
+    const writeLats = writeResults.map(w => w.avg);
+    const storageSizes = physicalStats.map(s => s.indexSize);
 
     const radar = [
       {
-        axis: "Vitesse Lecture",
-        no_index: Math.round(100 * (1 - physicalStats[0].readLatency / maxReadLat)),
-        single_index: Math.round(100 * (1 - physicalStats[1].readLatency / maxReadLat)),
-        compound_index: Math.round(100 * (1 - physicalStats[2].readLatency / maxReadLat)),
+        axis: "Lecture",
+        no_index: calculateRelativeScore(readLats, physicalStats[0].readLatency, true),
+        single_index: calculateRelativeScore(readLats, physicalStats[1].readLatency, true),
+        compound_index: calculateRelativeScore(readLats, physicalStats[2].readLatency, true),
       },
       {
-        axis: "Économie Écriture",
-        no_index: Math.round(100 * (1 - writeResults[0].avg / maxWriteLat)),
-        single_index: Math.round(100 * (1 - writeResults[1].avg / maxWriteLat)),
-        compound_index: Math.round(100 * (1 - writeResults[2].avg / maxWriteLat)),
+        axis: "Écriture",
+        no_index: calculateRelativeScore(writeLats, writeResults[0].avg, true),
+        single_index: calculateRelativeScore(writeLats, writeResults[1].avg, true),
+        compound_index: calculateRelativeScore(writeLats, writeResults[2].avg, true),
       },
       {
-        axis: "Légèreté Index",
-        no_index: 100,
-        single_index: Math.round(100 * (1 - physicalStats[1].indexSize / maxIdxSize)),
-        compound_index: Math.round(100 * (1 - physicalStats[2].indexSize / maxIdxSize)),
+        axis: "Stockage",
+        no_index: calculateRelativeScore(storageSizes, physicalStats[0].indexSize, true),
+        single_index: calculateRelativeScore(storageSizes, physicalStats[1].indexSize, true),
+        compound_index: calculateRelativeScore(storageSizes, physicalStats[2].indexSize, true),
       },
-      { axis: "Sélectivité", no_index: 0, single_index: 75, compound_index: 98 },
-      { axis: "Stabilité", no_index: 5, single_index: 80, compound_index: 95 }
+      {
+        axis: "Sélectivité",
+        no_index: selectivityScores[0],
+        single_index: selectivityScores[1],
+        compound_index: selectivityScores[2],
+      },
+      {
+        axis: "Stabilité",
+        no_index: getStabilityScore("no_index"),
+        single_index: getStabilityScore("single_index"),
+        compound_index: getStabilityScore("compound_index"),
+      }
     ];
 
     res.json({
       radar,
-      writePerf: [
-        { 
-          op: "Maintenance Index (ms/op)", 
-          no_index: parseFloat(writeResults[0].avg.toFixed(3)),
-          single_index: parseFloat(writeResults[1].avg.toFixed(3)),
-          compound_index: parseFloat(writeResults[2].avg.toFixed(3))
-        }
-      ],
+      writePerf: writeResults.map((w, i) => ({
+        op: "Unitaire",
+        no_index: i === 0 ? w.avg : 0,
+        single_index: i === 1 ? w.avg : 0,
+        compound_index: i === 2 ? w.avg : 0,
+      })),
       physical: physicalStats.map((s, i) => ({
         ...s,
         label: models[i].label,
