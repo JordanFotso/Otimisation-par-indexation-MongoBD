@@ -102,8 +102,8 @@ function LoadTesting() {
   const getStatusLabel = (val: string) => {
     const num = parseFloat(val);
     if (num === 0) return "EN ATTENTE";
-    if (num < 2) return "OPTIMAL";
-    if (num < 10) return "ACCEPTABLE";
+    if (num < 50) return "OPTIMAL";
+    if (num < 200) return "ACCEPTABLE";
     return "CRITIQUE";
   };
 

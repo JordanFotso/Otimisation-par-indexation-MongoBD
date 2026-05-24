@@ -17,21 +17,6 @@ const measureAndSaveTime = async (model: any, strategy: string, fn: () => Promis
   return latency;
 };
 
-export const performTest = async (req: Request, res: Response) => {
-  try {
-    const { strategy, email } = req.query;
-    let model;
-    if (strategy === "no_index") model = UserNoIndex;
-    else if (strategy === "single_index") model = UserSingleIndex;
-    else model = UserCompoundIndex;
-
-    const user = await model.findOne({ email: email as string }).lean();
-    res.json(user || { message: "non trouvé" });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
 export const getStatus = (req: Request, res: Response) => {
   res.json({
     status: "online",

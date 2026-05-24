@@ -5,7 +5,6 @@ const router = Router();
 
 // Routes Monitoring & Benchmark
 router.get("/benchmark/run", apiController.runBenchmark);
-router.get("/test", apiController.performTest);
 router.get("/status", apiController.getStatus);
 router.get("/collections", apiController.getCollections);
 router.get("/metrics/response-time", apiController.getResponseTime);
