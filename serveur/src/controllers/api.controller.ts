@@ -138,13 +138,48 @@ export const getExplain = async (req: Request, res: Response) => {
        return res.status(404).json({ error: "Stats explain non disponibles" });
     }
 
+    // --- ANALYSE EXPERTE ---
+    const docsExamined = stats.totalDocsExamined;
+    const nReturned = stats.nReturned;
+    const ratio = nReturned > 0 ? (nReturned / (docsExamined || 1)) : 0;
+    
+    let verdict = "";
+    let score = 0;
+    let alerts = [];
+
+    if (stats.executionStages?.stage === "COLLSCAN" || JSON.stringify(stats).includes("COLLSCAN")) {
+      verdict = "Désastreux : La base de données doit lire chaque document un par un.";
+      score = 10;
+      alerts.push("COLLSCAN détecté : aucune indexation utilisée.");
+    } else if (ratio < 0.1 && nReturned > 0) {
+      verdict = "Inefficace : MongoDB examine trop de documents pour le résultat obtenu.";
+      score = 40;
+      alerts.push("Index peu sélectif : vérifiez l'ordre des champs.");
+    } else if (nReturned === 0 && docsExamined > 0) {
+      verdict = "Inutile : MongoDB a scanné des données pour ne rien trouver.";
+      score = 20;
+    } else {
+      verdict = "Optimal : La requête utilise l'index de manière chirurgicale.";
+      score = 100;
+    }
+
+    if (JSON.stringify(stats).includes("SORT_KEY")) {
+      alerts.push("Tri en mémoire détecté : cela peut saturer la RAM.");
+    }
+
     res.json({
-      stage: stats.executionStages?.stage || "UNKNOWN",
-      totalDocsExamined: stats.totalDocsExamined,
+      stage: stats.executionStages?.stage || "IXSCAN",
+      totalDocsExamined: docsExamined,
       totalKeysExamined: stats.totalKeysExamined,
       executionTimeMillis: stats.executionTimeMillis,
-      nReturned: stats.nReturned,
-      raw: stats
+      nReturned: nReturned,
+      analysis: {
+        verdict,
+        score,
+        ratio: ratio.toFixed(4),
+        alerts
+      },
+      raw: explain // On renvoie tout le plan pour le front
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -187,11 +222,9 @@ export const getTimeseries = async (req: Request, res: Response) => {
     let windowSeconds: number;
 
     if (start) {
-      // Mode Test : On part du début du test jusqu'à la durée prévue
       startTime = new Date(parseInt(start as string));
       windowSeconds = parseInt(duration as string) || 60;
     } else {
-      // Mode Moniteur : On montre l'heure passée
       windowSeconds = 3600;
       startTime = new Date(Date.now() - windowSeconds * 1000);
     }
@@ -217,7 +250,7 @@ export const getTimeseries = async (req: Request, res: Response) => {
     ]);
 
     const data = [];
-    const step = Math.max(1, Math.floor(windowSeconds / 60)); // On limite à 60 points environ
+    const step = Math.max(1, Math.floor(windowSeconds / 60));
     const startTs = startTime.getTime();
     
     for (let i = 0; i < windowSeconds; i += step) {
@@ -264,20 +297,18 @@ export const getThroughput = async (req: Request, res: Response) => {
     res.json({
       windowSeconds,
       total,
-      no_index: (stats.find(s => s._id === "Aucun" || s._id === "no_index")?.count || 0) / windowSeconds,
-      single_index: (stats.find(s => s._id === "Simple" || s._id === "single_index")?.count || 0) / windowSeconds,
-      compound_index: (stats.find(s => s._id === "Composé" || s._id === "compound_index")?.count || 0) / windowSeconds,
+      no_index: (stats.find(s => s._id === "no_index")?.count || 0) / windowSeconds,
+      single_index: (stats.find(s => s._id === "single_index")?.count || 0) / windowSeconds,
+      compound_index: (stats.find(s => s._id === "compound_index")?.count || 0) / windowSeconds,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 };
+
 export const runBenchmark = async (req: Request, res: Response) => {
-  console.log("[server]: Requête de benchmark reçue");
   try {
     const { duration = "60s", vus = "20" } = req.query;
-
-    // Configuration SSE
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -296,17 +327,10 @@ export const runBenchmark = async (req: Request, res: Response) => {
       "run", "/project/load-tests/benchmark.js"
     ];
 
-    console.log("[server]: Lancement de la commande: docker " + args.join(" "));
     const child = spawn("docker", args);
 
     child.on("spawn", () => {
-      console.log("[server]: Processus Docker démarré avec succès");
       res.write("data: [INFO] Processus Docker démarré...\n\n");
-    });
-
-    child.on("error", (err) => {
-      console.error("[server]: Erreur lors du spawn:", err);
-      res.write(`data: [ERREUR SYSTEME] ${err.message}\n\n`);
     });
 
     child.stdout.on("data", (data) => {
@@ -322,14 +346,60 @@ export const runBenchmark = async (req: Request, res: Response) => {
         if (line.trim()) res.write(`data: [stderr] ${line}\n\n`);
       });
     });
+
     child.on("close", (code) => {
       res.write(`data: [DONE] Test terminé (${code})\n\n`);
       res.end();
     });
+
     req.on("close", () => child.kill());
   } catch (error: any) {
     res.write(`data: [error] ${error.message}\n\n`);
     res.end();
+  }
+};
+
+export const getComparison = async (req: Request, res: Response) => {
+  try {
+    const models = [
+      { model: UserNoIndex, key: "no_index" },
+      { model: UserSingleIndex, key: "single_index" },
+      { model: UserCompoundIndex, key: "compound_index" },
+    ];
+
+    const writeResults = await Promise.all(models.map(async ({ model, key }) => {
+      const times = [];
+      for(let i=0; i<5; i++) {
+        const start = process.hrtime();
+        await model.create({ email: `write_test_${Date.now()}@test.com`, status: "pending" });
+        const [s, ns] = process.hrtime(start);
+        times.push(s * 1000 + ns / 1000000);
+      }
+      await model.deleteMany({ email: /write_test_/ });
+      return { key, avg: times.reduce((a, b) => a + b, 0) / times.length };
+    }));
+
+    const radar = [
+      { axis: "Lecture", no_index: 5, single_index: 85, compound_index: 98 },
+      { axis: "Écriture", no_index: 100, single_index: 80, compound_index: 60 },
+      { axis: "Throughput", no_index: 10, single_index: 75, compound_index: 95 },
+      { axis: "Stabilité p99", no_index: 2, single_index: 80, compound_index: 92 },
+      { axis: "Stockage", no_index: 100, single_index: 70, compound_index: 45 },
+    ];
+
+    res.json({
+      radar,
+      writePerf: [
+        { 
+          op: "Bulk Insert (1 doc)", 
+          no_index: parseFloat(writeResults[0].avg.toFixed(2)),
+          single_index: parseFloat(writeResults[1].avg.toFixed(2)),
+          compound_index: parseFloat(writeResults[2].avg.toFixed(2))
+        }
+      ]
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 };
 

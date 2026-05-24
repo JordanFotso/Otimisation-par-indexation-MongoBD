@@ -11,6 +11,7 @@ import {
 import appCss from "../styles.css?url";
 import { ConsoleSidebar } from "@/components/console-sidebar";
 import { TopBar } from "@/components/top-bar";
+import { StatusBar } from "@/components/status-bar";
 
 function NotFoundComponent() {
   return (
@@ -96,7 +97,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex flex-col h-screen bg-background text-foreground">
+      <div className="flex flex-col h-screen bg-background text-foreground pb-7">
         <TopBar />
         <div className="flex flex-1 overflow-hidden">
           <ConsoleSidebar />
@@ -106,6 +107,7 @@ function RootComponent() {
             </div>
           </main>
         </div>
+        <StatusBar />
       </div>
     </QueryClientProvider>
   );

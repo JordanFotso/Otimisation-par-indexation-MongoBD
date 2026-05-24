@@ -9,6 +9,7 @@ router.get("/status", apiController.getStatus);
 router.get("/collections", apiController.getCollections);
 router.get("/metrics/response-time", apiController.getResponseTime);
 router.get("/metrics/throughput", apiController.getThroughput);
+router.get("/metrics/comparison", apiController.getComparison);
 router.get("/metrics/timeseries", apiController.getTimeseries);
 router.get("/scenarios", apiController.getScenarios);
 router.get("/explain", apiController.getExplain);

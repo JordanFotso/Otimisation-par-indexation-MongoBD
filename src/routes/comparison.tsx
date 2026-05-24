@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
-import { RESPONSE_TIME, WRITE_PERF } from "@/lib/mock-data";
+import { useComparison } from "@/hooks/use-comparison";
+import { useResponseTime } from "@/hooks/use-metrics";
 import {
   ResponsiveContainer,
   RadarChart,
@@ -16,7 +17,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/comparison")({
   component: Comparison,
@@ -30,22 +31,25 @@ const tooltipStyle = {
   fontFamily: "var(--font-mono)",
 };
 
-const RADAR = [
-  { axis: "Lecture", no_index: 8, single_index: 78, compound_index: 96 },
-  { axis: "Écriture", no_index: 95, single_index: 70, compound_index: 52 },
-  { axis: "Throughput", no_index: 12, single_index: 71, compound_index: 97 },
-  { axis: "Stabilité p99", no_index: 5, single_index: 72, compound_index: 92 },
-  { axis: "Coût stockage", no_index: 100, single_index: 78, compound_index: 56 },
-];
-
 function Comparison() {
+  const { data: comparison, isLoading: loadingComp } = useComparison();
+  const { data: responseTime, isLoading: loadingRes } = useResponseTime();
+
+  if (loadingComp || loadingRes) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHeader
         title="Comparaison"
         description="Synthèse multi-axes des trois stratégies. Évalue le compromis lecture / écriture / stockage."
         actions={
-          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-md border border-border hover:bg-accent">
+          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-md border border-border bg-card hover:bg-accent">
             <Download className="h-3.5 w-3.5" /> Exporter CSV
           </button>
         }
@@ -56,7 +60,7 @@ function Comparison() {
           <h3 className="text-sm font-semibold mb-3">Profil multi-axes</h3>
           <div className="h-80">
             <ResponsiveContainer>
-              <RadarChart data={RADAR}>
+              <RadarChart data={comparison?.radar}>
                 <PolarGrid stroke="var(--border)" />
                 <PolarAngleAxis dataKey="axis" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                 <PolarRadiusAxis stroke="var(--border)" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
@@ -73,15 +77,15 @@ function Comparison() {
           <h3 className="text-sm font-semibold mb-3">Coût en écriture (ms)</h3>
           <div className="h-80">
             <ResponsiveContainer>
-              <BarChart data={WRITE_PERF}>
+              <BarChart data={comparison?.writePerf}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="op" stroke="var(--muted-foreground)" fontSize={11} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} unit="ms" />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 11, fontFamily: "var(--font-mono)" }} />
-                <Bar dataKey="no_index" fill="var(--chart-4)" />
-                <Bar dataKey="single_index" fill="var(--chart-2)" />
-                <Bar dataKey="compound_index" fill="var(--chart-3)" />
+                <Bar dataKey="no_index" name="Aucun" fill="var(--chart-4)" />
+                <Bar dataKey="single_index" name="Simple" fill="var(--chart-2)" />
+                <Bar dataKey="compound_index" name="Composé" fill="var(--chart-3)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -105,7 +109,7 @@ function Comparison() {
             </tr>
           </thead>
           <tbody>
-            {RESPONSE_TIME.map((r, i) => {
+            {responseTime?.map((r, i) => {
               const tags = [
                 { stage: "COLLSCAN", verdict: "Inutilisable à grande échelle", tone: "destructive" },
                 { stage: "IXSCAN", verdict: "Bon pour lookups simples", tone: "warning" },
@@ -114,10 +118,10 @@ function Comparison() {
               const idx = ["—", "{ email: 1 }", "{ status, createdAt, email }"][i];
               const toneClass =
                 tags.tone === "destructive"
-                  ? "bg-destructive/15 text-destructive border-destructive/30"
+                  ? "bg-destructive/15 text-destructive border border-destructive/30"
                   : tags.tone === "warning"
                   ? "bg-warning/15 text-warning border-warning/30"
-                  : "bg-success/15 text-success border-success/30";
+                  : "bg-success/15 text-success border border-success/30";
               return (
                 <tr key={r.collection} className="border-t border-border hover:bg-accent/40">
                   <td className="px-4 py-2.5 font-mono">{r.collection}</td>
@@ -139,10 +143,10 @@ function Comparison() {
       <div className="mt-6 console-card p-5">
         <h3 className="text-sm font-semibold mb-2">Conclusion</h3>
         <ul className="space-y-1.5 text-[13px] text-muted-foreground list-disc pl-5">
-          <li>Les index réduisent le temps de réponse de plusieurs ordres de grandeur (1820 ms → 6 ms).</li>
+          <li>Les index réduisent le temps de réponse de plusieurs ordres de grandeur.</li>
           <li>COLLSCAN devient inopérant au-delà de quelques centaines de requêtes par seconde.</li>
           <li>L'index composé domine sur les requêtes complexes (filtre + tri + pagination).</li>
-          <li>Compromis : +62 % de coût d'écriture pour gagner 99 % de latence en lecture.</li>
+          <li>Compromis : Le coût d'écriture augmente avec le nombre d'index (plus de maintenance).</li>
         </ul>
       </div>
     </>
