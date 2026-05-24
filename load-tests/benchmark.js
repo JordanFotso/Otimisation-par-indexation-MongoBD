@@ -20,10 +20,10 @@ export default function () {
   const BASE_URL = __ENV.API_URL || 'http://api_optimisation:3001/api';
   const email = `test_${Math.floor(Math.random() * 100000)}@example.com`;
 
-  // On passe la stratégie dans l'URL pour le middleware de l'API
-  http.get(`${BASE_URL}/status?strategy=no_index&email=${email}`);
-  http.get(`${BASE_URL}/status?strategy=single_index&email=${email}`);
-  http.get(`${BASE_URL}/status?strategy=compound_index&email=${email}`);
+  // On utilise le nouvel endpoint /test qui fait une vraie recherche DB
+  http.get(`${BASE_URL}/test?strategy=no_index&email=${email}`);
+  http.get(`${BASE_URL}/test?strategy=single_index&email=${email}`);
+  http.get(`${BASE_URL}/test?strategy=compound_index&email=${email}`);
 
   sleep(1);
 }

@@ -17,6 +17,21 @@ const measureAndSaveTime = async (model: any, strategy: string, fn: () => Promis
   return latency;
 };
 
+export const performTest = async (req: Request, res: Response) => {
+  try {
+    const { strategy, email } = req.query;
+    let model;
+    if (strategy === "no_index") model = UserNoIndex;
+    else if (strategy === "single_index") model = UserSingleIndex;
+    else model = UserCompoundIndex;
+
+    const user = await model.findOne({ email: email as string }).lean();
+    res.json(user || { message: "non trouvé" });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const getStatus = (req: Request, res: Response) => {
   res.json({
     status: "online",
@@ -82,21 +97,21 @@ export const getResponseTime = async (req: Request, res: Response) => {
     const email = randomUser?.email || "test_1@example.com";
 
     const models = [
-      { model: UserNoIndex, collection: "Aucun" },
-      { model: UserSingleIndex, collection: "Simple" },
-      { model: UserCompoundIndex, collection: "Composé" },
+      { model: UserNoIndex, key: "no_index", label: "Aucun" },
+      { model: UserSingleIndex, key: "single_index", label: "Simple" },
+      { model: UserCompoundIndex, key: "compound_index", label: "Composé" },
     ];
 
-    const results = await Promise.all(models.map(async ({ model, collection }) => {
+    const results = await Promise.all(models.map(async ({ model, key, label }) => {
       const times: number[] = [];
       for(let i=0; i<3; i++) {
-        const time = await measureAndSaveTime(model, collection, () => model.findOne({ email }).lean());
+        const time = await measureAndSaveTime(model, key, () => model.findOne({ email }).lean());
         times.push(time);
       }
 
       const avg = times.reduce((a, b) => a + b, 0) / times.length;
       return {
-        collection,
+        collection: label,
         min: Math.min(...times),
         avg: parseFloat(avg.toFixed(2)),
         p95: Math.max(...times),
@@ -191,8 +206,8 @@ export const getTimeseries = async (req: Request, res: Response) => {
       startTime = new Date(parseInt(start as string));
       windowSeconds = parseInt(duration as string) || 60;
     } else {
-      // Mode Moniteur : On montre les 5 dernières minutes glissantes
-      windowSeconds = 300;
+      // Mode Moniteur : On montre l'heure passée
+      windowSeconds = 3600;
       startTime = new Date(Date.now() - windowSeconds * 1000);
     }
 
@@ -217,23 +232,28 @@ export const getTimeseries = async (req: Request, res: Response) => {
     ]);
 
     const data = [];
+    const step = Math.max(1, Math.floor(windowSeconds / 60)); // On limite à 60 points environ
     const startTs = startTime.getTime();
     
-    for (let i = 0; i < windowSeconds; i++) {
+    for (let i = 0; i < windowSeconds; i += step) {
       const currentTs = startTs + i * 1000;
-      const timeLabel = `${i}s`;
+      const timeLabel = start ? `${i}s` : `-${Math.round((Date.now() - currentTs)/1000)}s`;
 
       const findStat = (strat: string, time: number) => 
-        stats.find(s => s._id.timestamp === time && s._id.strategy === strat);
+        stats.find(s => s._id.timestamp >= time && s._id.timestamp < time + (step * 1000) && s._id.strategy === strat);
+
+      const sNo = findStat("no_index", currentTs);
+      const sSingle = findStat("single_index", currentTs);
+      const sCompound = findStat("compound_index", currentTs);
 
       data.push({
         t: timeLabel,
-        no_index: findStat("no_index", currentTs)?.avgLatency || 0,
-        no_index_rps: findStat("no_index", currentTs)?.count || 0,
-        single_index: findStat("single_index", currentTs)?.avgLatency || 0,
-        single_index_rps: findStat("single_index", currentTs)?.count || 0,
-        compound_index: findStat("compound_index", currentTs)?.avgLatency || 0,
-        compound_index_rps: findStat("compound_index", currentTs)?.count || 0,
+        no_index: sNo?.avgLatency || 0,
+        no_index_rps: sNo?.count || 0,
+        single_index: sSingle?.avgLatency || 0,
+        single_index_rps: sSingle?.count || 0,
+        compound_index: sCompound?.avgLatency || 0,
+        compound_index_rps: sCompound?.count || 0,
       });
     }
 

@@ -15,11 +15,16 @@ app.use((req, res, next) => {
     const [seconds, nanoseconds] = process.hrtime(start);
     const latency = seconds * 1000 + nanoseconds / 1000000;
     
-    const strategy = (req.query.strategy as string);
+    let strategy = (req.query.strategy as string);
     
-    // On enregistre si une stratégie est précisée (k6)
+    // Mapping de sécurité pour harmoniser les noms
+    if (strategy === "Aucun") strategy = "no_index";
+    if (strategy === "Simple") strategy = "single_index";
+    if (strategy === "Composé") strategy = "compound_index";
+    
     if (strategy) {
-      Metric.create({ strategy, latency }).catch(() => {});
+      console.log(`[metrics]: Enregistrement pour ${strategy} - ${latency.toFixed(2)}ms`);
+      Metric.create({ strategy, latency }).catch(err => console.error("[metrics]: Erreur d'enregistrement", err));
     }
   });
   
